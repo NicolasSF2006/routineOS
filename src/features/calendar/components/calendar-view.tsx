@@ -1,0 +1,101 @@
+"use client"
+
+import { useState } from "react"
+import { Card } from "@/components/ui/card"
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion"
+import { PageHeading } from "@/components/shared/page-heading"
+import { CalendarGrid } from "@/features/calendar/components/calendar-grid"
+import { CalendarLegend } from "@/features/calendar/components/calendar-legend"
+import { CalendarStats } from "@/features/calendar/components/calendar-stats"
+import { DayDetailDialog } from "@/features/calendar/components/day-detail-dialog"
+import { useCalendarRecords } from "@/features/calendar/hooks/use-calendar-records"
+import { useRoutine } from "@/features/routine/hooks/use-routine"
+import { computeMonthStats } from "@/features/study-session/utils/study-session"
+import { useStudySettings } from "@/hooks/use-study-settings"
+import { getCurrentMonthMeta, getMonthLabel } from "@/utils/date"
+
+export function CalendarioView() {
+  const { settings, hydrated } = useStudySettings()
+  const { routine, isLoading: routineLoading } = useRoutine()
+  const [selectedDay, setSelectedDay] = useState<number | null>(null)
+  const [open, setOpen] = useState(false)
+  const { records, nowMs } = useCalendarRecords()
+
+  const { year, month } = getCurrentMonthMeta()
+  const monthLabel = getMonthLabel(year, month)
+
+  const monthStats = computeMonthStats(year, month, settings, records, routine)
+
+  const handleSelect = (day: number) => {
+    setSelectedDay(day)
+    setOpen(true)
+  }
+
+  if (!hydrated || routineLoading) {
+    return (
+      <div className="flex flex-col gap-6">
+        <PageHeading title="Calendário" description="Carregando..." />
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      <PageHeading title="Calendário" description={`Visão mensal do seu progresso em ${monthLabel}.`} />
+
+      <div className="grid gap-6 lg:grid-cols-[240px_1fr_260px]">
+        <div className="order-2 lg:order-1">
+          <Card className="p-0 lg:hidden">
+            <Accordion>
+              <AccordionItem value="legend" className="border-none">
+                <AccordionTrigger className="px-4 py-3 text-sm font-semibold">
+                  Legenda de cores
+                </AccordionTrigger>
+                <AccordionContent className="px-4 pb-4">
+                  <CalendarLegend />
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
+          </Card>
+          <Card className="hidden p-4 lg:block">
+            <h3 className="mb-3 text-sm font-semibold text-foreground">Legenda de cores</h3>
+            <CalendarLegend />
+          </Card>
+        </div>
+
+        <CalendarGrid
+          year={year}
+          month={month}
+          records={records}
+          settings={settings}
+          routine={routine}
+          onSelectDay={handleSelect}
+        />
+
+        <div className="order-3">
+          <Card className="p-4">
+            <h3 className="mb-3 text-sm font-semibold text-foreground">Estatísticas do mês</h3>
+            <CalendarStats monthStats={monthStats} />
+          </Card>
+        </div>
+      </div>
+
+      <DayDetailDialog
+        day={selectedDay}
+        year={year}
+        month={month}
+        open={open}
+        onOpenChange={setOpen}
+        records={records}
+        settings={settings}
+        routine={routine}
+        nowMs={nowMs}
+      />
+    </div>
+  )
+}
