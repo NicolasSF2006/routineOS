@@ -1,4 +1,4 @@
-import { DEFAULT_SETTINGS } from "@/constants/settings"
+import { DEFAULT_SETTINGS, DEFAULT_SOUND_PREFERENCES, MAX_CUSTOM_SOUND_SIZE_BYTES } from "@/constants/settings"
 import { DEFAULT_ROUTINE } from "@/constants/routine"
 import { STORAGE_EVENTS, STORAGE_KEYS } from "@/constants/storage"
 import type {
@@ -12,6 +12,9 @@ import type {
   StudyPause,
   StudySettings,
   StudySessionStatus,
+  CustomSound,
+  SoundEventKey,
+  SoundPreference,
 } from "@/types/study"
 
 const ROUTINE_MODE_COMPAT: Record<string, RoutineMode> = {
@@ -142,11 +145,89 @@ function normalizeRoutineMode(value: unknown): RoutineMode {
   return typeof value === "string" ? ROUTINE_MODE_COMPAT[value] ?? DEFAULT_SETTINGS.routineMode : DEFAULT_SETTINGS.routineMode
 }
 
+function isSoundEventKey(value: unknown): value is SoundEventKey {
+  return (
+    value === "shortBreak" ||
+    value === "longBreak" ||
+    value === "lunch" ||
+    value === "subjectChange"
+  )
+}
+
+function normalizeSoundPreference(raw: unknown): SoundPreference {
+  const preference = isObject(raw) ? raw : {}
+  const audioId = typeof preference.audioId === "string" && preference.audioId.trim().length > 0
+    ? preference.audioId
+    : "default"
+  const startSeconds = normalizeNumber(preference.startSeconds, 0)
+  const endSeconds =
+    typeof preference.endSeconds === "number" && Number.isFinite(preference.endSeconds)
+      ? Math.max(0, preference.endSeconds)
+      : null
+
+  return {
+    audioId,
+    startSeconds: Math.max(0, startSeconds),
+    endSeconds,
+  }
+}
+
+function normalizeCustomSound(raw: unknown): CustomSound | null {
+  if (!isObject(raw)) return null
+
+  const id = normalizeString(raw.id, "")
+  const name = normalizeString(raw.name, "")
+  const dataUrl = normalizeString(raw.dataUrl, "")
+  const mimeType = normalizeString(raw.mimeType, "audio/*")
+  const sizeBytes = normalizeNumber(raw.sizeBytes, 0)
+  const durationSeconds = normalizeNumber(raw.durationSeconds, 0)
+
+  if (!id || !name || !dataUrl || sizeBytes <= 0 || sizeBytes > MAX_CUSTOM_SOUND_SIZE_BYTES) {
+    return null
+  }
+
+  return {
+    id,
+    name,
+    dataUrl,
+    mimeType,
+    sizeBytes,
+    durationSeconds: Math.max(0, durationSeconds),
+    createdAt: normalizeString(raw.createdAt, new Date(0).toISOString()),
+  }
+}
+
 function normalizeSettings(raw: unknown): StudySettings {
-  const settings = { ...DEFAULT_SETTINGS, ...(isObject(raw) ? raw : {}) }
+  const rawSettings = isObject(raw) ? raw : {}
+  const settings = { ...DEFAULT_SETTINGS, ...rawSettings }
+
+  const customSounds = Array.isArray(rawSettings.customSounds)
+    ? rawSettings.customSounds
+        .map(normalizeCustomSound)
+        .filter((sound): sound is CustomSound => sound !== null)
+    : []
+
+  const rawPreferences = isObject(rawSettings.soundPreferences) ? rawSettings.soundPreferences : {}
+  const soundPreferences = { ...DEFAULT_SOUND_PREFERENCES }
+
+  for (const key of Object.keys(soundPreferences)) {
+    if (isSoundEventKey(key)) {
+      soundPreferences[key] = normalizeSoundPreference(rawPreferences[key])
+    }
+  }
+
+  const validAudioIds = new Set(["default", ...customSounds.map((sound) => sound.id)])
+  for (const key of Object.keys(soundPreferences)) {
+    if (isSoundEventKey(key) && !validAudioIds.has(soundPreferences[key].audioId)) {
+      soundPreferences[key] = { ...soundPreferences[key], audioId: "default" }
+    }
+  }
+
   return {
     ...settings,
     routineMode: normalizeRoutineMode(settings.routineMode),
+    customSounds,
+    soundPreferences,
   }
 }
 

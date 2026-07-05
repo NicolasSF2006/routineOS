@@ -80,17 +80,40 @@ export interface StatusMeta {
   swatch: string
 }
 
+export type SoundEventKey = "shortBreak" | "longBreak" | "lunch" | "subjectChange"
+
+export interface CustomSound {
+  id: string
+  name: string
+  dataUrl: string
+  mimeType: string
+  sizeBytes: number
+  durationSeconds: number
+  createdAt: string
+}
+
+export interface SoundPreference {
+  audioId: "default" | string
+  startSeconds: number
+  endSeconds: number | null
+}
+
+export type SoundPreferences = Record<SoundEventKey, SoundPreference>
+
 export interface StudySettings {
-  soundsEnabled: boolean
-  soundShortBreak: boolean
-  soundLongBreak: boolean
-  soundLunch: boolean
-  soundSubjectChange: boolean
+  // Campos legados mantidos para compatibilidade com dados antigos do localStorage.
+  soundsEnabled?: boolean
+  soundShortBreak?: boolean
+  soundLongBreak?: boolean
+  soundLunch?: boolean
+  soundSubjectChange?: boolean
   routineMode: RoutineMode
   dailyGoalHours: number
   monthlyGoalHours: number
   latenessToleranceMinutes: number
   theme?: Theme
+  customSounds: CustomSound[]
+  soundPreferences: SoundPreferences
 }
 
 export type StudySessionStatus = "in-progress" | "completed" | "canceled"

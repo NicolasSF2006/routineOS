@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## v1.2.2
+
+- Configurações atualizadas com título centralizado e sem descrição.
+- Card de sons ganhou modo de edição com animação de flip.
+- Adicionada seleção de som padrão ou áudios importados para cada evento sonoro.
+- Adicionado som padrão de sino via Web Audio API.
+- Adicionada importação de áudios personalizados com limite de 5 MB.
+- Adicionada configuração de início/fim para áudios com mais de 10 segundos.
+- Card de Rotina substitui o antigo Modo da rotina e prepara seleção de rotinas personalizadas.
+- Removido botão de resetar rotina padrão da interface.
+
 ## v1.2.1
 
 - Adicionada navegação semanal com setas.

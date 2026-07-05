@@ -1,26 +1,23 @@
 "use client"
 
-import { RotateCcw, CalendarClock } from "lucide-react"
+import { CalendarClock } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+} from "@/components/ui/select"
+import type { Routine } from "@/types/study"
 
 interface RoutineSettingsCardProps {
+  routine: Routine
   hasCustomRoutine: boolean
-  resetRoutine: () => void
 }
 
-export function RoutineSettingsCard({ hasCustomRoutine, resetRoutine }: RoutineSettingsCardProps) {
-  const handleResetRoutine = () => {
-    if (!hasCustomRoutine) return
-
-    const confirmed = window.confirm(
-      "Deseja resetar a rotina personalizada e voltar para a rotina padrão? Os registros de estudo não serão apagados.",
-    )
-
-    if (confirmed) resetRoutine()
-  }
-
+export function RoutineSettingsCard({ routine, hasCustomRoutine }: RoutineSettingsCardProps) {
   return (
     <Card>
       <CardHeader>
@@ -30,32 +27,35 @@ export function RoutineSettingsCard({ hasCustomRoutine, resetRoutine }: RoutineS
           </span>
           <CardTitle className="text-xl">Rotina</CardTitle>
         </div>
-        <CardDescription>Fonte atual da rotina usada no app</CardDescription>
+        <CardDescription>Escolha qual rotina personalizada deseja usar</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
-        <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-muted/30 p-3">
-          <div className="flex flex-col">
-            <span className="text-sm font-medium text-foreground">Tipo da rotina</span>
-            <span className="text-sm text-muted-foreground">
-              {hasCustomRoutine
-                ? "A aplicação está usando uma rotina personalizada."
-                : "A aplicação está usando a rotina padrão."}
-            </span>
+        <div className="flex flex-col gap-3 rounded-xl border border-border bg-muted/30 p-4">
+          <div className="flex flex-col gap-1">
+            <span className="text-base font-medium text-foreground">Tipo da rotina</span>
           </div>
-          <Badge variant={hasCustomRoutine ? "default" : "secondary"}>
-            {hasCustomRoutine ? "Personalizada" : "Padrão"}
-          </Badge>
+
+          <Select value={hasCustomRoutine ? routine.id : "none"} disabled={!hasCustomRoutine}>
+            <SelectTrigger className="w-full justify-between text-base">
+              <span>
+                {hasCustomRoutine ? routine.name : "Nenhuma rotina personalizada criada"}
+              </span>
+            </SelectTrigger>
+            <SelectContent>
+              {hasCustomRoutine ? (
+                <SelectItem value={routine.id}>{routine.name}</SelectItem>
+              ) : (
+                <SelectItem value="none">Nenhuma rotina personalizada criada</SelectItem>
+              )}
+            </SelectContent>
+          </Select>
         </div>
 
-        <Button
-          type="button"
-          variant="outline"
-          className="justify-start"
-          disabled={!hasCustomRoutine}
-          onClick={handleResetRoutine}
-        >
-          <RotateCcw className="mr-2 size-4" />
-          Resetar rotina padrão
+        <Button type="button" variant="outline" className="mt-3 justify-center" disabled>
+          Configurar rotina
+          <Badge variant="secondary" className="ml-2">
+            Em breve
+          </Badge>
         </Button>
       </CardContent>
     </Card>
