@@ -1,10 +1,21 @@
-import { CheckCircle2 } from "lucide-react"
+import { CheckCircle2, XCircle } from "lucide-react"
 
 interface PresenceStatusProps {
   presenceTime: string | null
+  canceledTime?: string | null
 }
 
-export function PresenceStatus({ presenceTime }: PresenceStatusProps) {
+export function PresenceStatus({ presenceTime, canceledTime }: PresenceStatusProps) {
+  if (canceledTime) {
+    return (
+      <div className="flex items-center gap-2 rounded-xl bg-status-falta/10 px-4 py-3 text-sm">
+        <XCircle className="size-4 text-status-falta" />
+        <span className="text-muted-foreground">Dia de estudo cancelado às</span>
+        <span className="font-semibold text-foreground">{canceledTime}</span>
+      </div>
+    )
+  }
+
   if (!presenceTime) {
     return (
       <p className="text-sm text-muted-foreground">
@@ -21,4 +32,3 @@ export function PresenceStatus({ presenceTime }: PresenceStatusProps) {
     </div>
   )
 }
-

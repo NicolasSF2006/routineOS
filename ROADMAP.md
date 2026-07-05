@@ -45,6 +45,14 @@
 - Edição de dias da semana.
 - Persistência da rotina personalizada.
 
+### Sprint 1.2A — Ajustes de Rotina, Controle e Calendário
+
+- Navegação semanal completa de domingo a sábado.
+- Dias sem rotina tratados na Rotina, Controle de estudos e Calendário.
+- Cancelamento e retomada de dia de aula preservando histórico.
+- Progressão manual e automática dos blocos da rotina.
+- Calendário com rotina prevista, hoje em destaque e status cancelado/retomado.
+
 ## Sprint 2 — Estatísticas
 
 - Métricas mais completas.

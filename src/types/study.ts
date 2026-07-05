@@ -63,7 +63,9 @@ export interface WeekDay {
 }
 
 export type DayStatus =
+  | "rotina-prevista"
   | "falta"
+  | "cancelado"
   | "atrasado"
   | "adiantado"
   | "correto"
@@ -106,13 +108,19 @@ export interface StudySession {
   studyStartedAt: string | null
   activeSeconds: number
   pauseSeconds: number
+  routineBreakSeconds: number
   bonusSeconds: number
   status: DayRecordStatus
   pauses: StudyPause[]
   completedAt: string | null
   canceledAt: string | null
+  resumedAt: string | null
   updatedAt: string
   activeSegmentStartedAt: string | null
+  routineBreakSegmentStartedAt: string | null
+  routineBlockIndex: number
+  routineBlockElapsedSeconds: number
+  awaitingNextBlock: boolean
 }
 
 export type DailyStudyRecord = StudySession
@@ -132,6 +140,7 @@ export interface DayDetail {
   pauseList: { start: string; end: string; duration: string }[]
   bonus: string | null
   canceledAt: string | null
+  resumedAt: string | null
 }
 
 export interface MonthStats {
@@ -143,4 +152,11 @@ export interface MonthStats {
   missedDays: number
 }
 
-export type ControlState = "inicial" | "presente" | "estudando" | "pausado" | "concluido"
+export type ControlState =
+  | "inicial"
+  | "presente"
+  | "estudando"
+  | "pausado"
+  | "aguardando"
+  | "cancelado"
+  | "concluido"

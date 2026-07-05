@@ -14,7 +14,7 @@ export function StudyGoalBanner({ bonusSeconds }: StudyGoalBannerProps) {
       </div>
       <div className="flex items-center gap-2 rounded-lg bg-background/60 px-3 py-1.5">
         <Sparkles className="size-4 text-status-acima" />
-        <span className="text-xs text-muted-foreground">Horas bônus</span>
+        <span className="text-sm text-muted-foreground">Horas bônus</span>
         <span className="text-sm font-semibold text-foreground">
           {formatDuration(bonusSeconds)}
         </span>

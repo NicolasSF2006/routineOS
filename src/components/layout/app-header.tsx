@@ -33,7 +33,7 @@ export function AppHeader({
 
   return (
     <header className="sticky top-0 z-40 border-b border-border/80 bg-background/85 backdrop-blur-md">
-      <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-4 sm:px-6">
+      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
         <div className="flex w-20 items-center gap-2">
           <div className="flex size-9 items-center justify-center rounded-xl bg-primary text-primary-foreground">
             <GraduationCap className="size-5" aria-hidden="true" />
@@ -41,12 +41,9 @@ export function AppHeader({
         </div>
 
         <div className="flex min-w-0 flex-col items-center">
-          <h1 className="text-base font-semibold leading-tight text-foreground sm:text-lg">
+          <h1 className="text-xl font-semibold leading-tight text-foreground">
             RoutineOS
           </h1>
-          <span className="max-w-[13rem] text-center text-[11px] font-medium leading-tight text-muted-foreground sm:max-w-none sm:text-xs">
-            The operating system for your personal growth.
-          </span>
         </div>
 
         <div className="flex w-20 items-center justify-end gap-1">
@@ -100,7 +97,7 @@ export function AppHeader({
                       </span>
                       <span className="flex flex-col">
                         <span className="text-sm font-medium">{item.label}</span>
-                        <span className="text-xs text-muted-foreground">{item.description}</span>
+                        <span className="text-sm text-muted-foreground">{item.description}</span>
                       </span>
                     </button>
                   )

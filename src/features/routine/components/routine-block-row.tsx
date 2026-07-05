@@ -24,14 +24,14 @@ export function RoutineBlockRow({ block, isCurrent }: RoutineBlockRowProps) {
 
       <div className="flex w-20 shrink-0 flex-col font-mono text-sm">
         <span className="font-semibold text-foreground">{block.startTime}</span>
-        <span className="text-xs text-muted-foreground">{block.endTime}</span>
+        <span className="text-sm text-muted-foreground">{block.endTime}</span>
       </div>
 
       <div className="flex min-w-0 flex-1 flex-col">
         <span className="truncate text-sm font-medium text-foreground">{block.title}</span>
         <span
           className={cn(
-            "mt-1 inline-flex w-fit items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium",
+            "mt-1 inline-flex w-fit items-center gap-1.5 rounded-full border px-2 py-0.5 text-sm font-medium",
             meta.badge,
           )}
         >
@@ -41,7 +41,7 @@ export function RoutineBlockRow({ block, isCurrent }: RoutineBlockRowProps) {
       </div>
 
       {isCurrent ? (
-        <span className="hidden shrink-0 items-center gap-1 rounded-full bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground sm:inline-flex">
+        <span className="hidden shrink-0 items-center gap-1 rounded-full bg-primary px-2.5 py-1 text-sm font-medium text-primary-foreground sm:inline-flex">
           Agora <ArrowRight className="size-3" />
         </span>
       ) : null}

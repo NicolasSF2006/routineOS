@@ -1,5 +1,26 @@
 # CHANGELOG
 
+## v1.2.1
+
+- Adicionada navegação semanal com setas.
+- Ajustado formato dos dias com nome e número.
+- Bloqueado registro de presença em datas passadas ou futuras.
+- Removido status separado de cancelado e retomado.
+- Ajustada regra de bônus para considerar apenas tempo extra a partir de 2 minutos.
+- Removido botão de cancelar após atingir a meta.
+- Corrigidos textos e modal de cancelamento.
+
+## v1.2.0
+
+- Ajustada navegação semanal da rotina com domingo a sábado.
+- Adicionado suporte visual para dias sem rotina.
+- Impedido início de estudos em dias sem rotina.
+- Adicionado cancelamento com confirmação.
+- Adicionada retomada de dia cancelado preservando tempo estudado.
+- Adicionada progressão manual e automática dos blocos da rotina.
+- Ajustado calendário com rotina prevista, destaque do dia atual e status cancelado/retomado.
+- Ajustado modal de detalhes do dia.
+
 ## v1.1.0
 
 - Adicionada persistência da rotina personalizada no localStorage.

@@ -3,9 +3,21 @@ import type { DayStatus, StatusMeta } from "@/types/study"
 export const WEEK_HEADERS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"]
 
 export const STATUS_META: Record<DayStatus, StatusMeta> = {
+  "rotina-prevista": {
+    label: "Rotina prevista",
+    description: "Dia com rotina programada.",
+    cell: "bg-status-prevista/15 text-status-prevista border-status-prevista/30",
+    swatch: "bg-status-prevista",
+  },
   falta: {
     label: "Falta",
     description: "Nenhuma presença registrada no dia.",
+    cell: "bg-status-falta/15 text-status-falta border-status-falta/30",
+    swatch: "bg-status-falta",
+  },
+  cancelado: {
+    label: "Cancelado",
+    description: "Dia de aula cancelado.",
     cell: "bg-status-falta/15 text-status-falta border-status-falta/30",
     swatch: "bg-status-falta",
   },
@@ -46,4 +58,3 @@ export const STATUS_META: Record<DayStatus, StatusMeta> = {
     swatch: "bg-muted-foreground/40",
   },
 }
-

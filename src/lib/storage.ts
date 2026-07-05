@@ -142,53 +142,76 @@ function normalizeRoutineMode(value: unknown): RoutineMode {
   return typeof value === "string" ? ROUTINE_MODE_COMPAT[value] ?? DEFAULT_SETTINGS.routineMode : DEFAULT_SETTINGS.routineMode
 }
 
-function normalizeSettings(raw: Partial<StudySettings>): StudySettings {
-  const settings = { ...DEFAULT_SETTINGS, ...raw }
+function normalizeSettings(raw: unknown): StudySettings {
+  const settings = { ...DEFAULT_SETTINGS, ...(isObject(raw) ? raw : {}) }
   return {
     ...settings,
     routineMode: normalizeRoutineMode(settings.routineMode),
   }
 }
 
-function normalizePause(raw: Partial<StudyPause>): StudyPause {
+function normalizePause(raw: unknown): StudyPause {
+  const pause = isObject(raw) ? raw : {}
+
   return {
-    startedAt: typeof raw.startedAt === "string" ? raw.startedAt : new Date(0).toISOString(),
-    endedAt: typeof raw.endedAt === "string" ? raw.endedAt : null,
+    startedAt: typeof pause.startedAt === "string" ? pause.startedAt : new Date(0).toISOString(),
+    endedAt: typeof pause.endedAt === "string" ? pause.endedAt : null,
     durationSeconds:
-      typeof raw.durationSeconds === "number" && Number.isFinite(raw.durationSeconds)
-        ? raw.durationSeconds
+      typeof pause.durationSeconds === "number" && Number.isFinite(pause.durationSeconds)
+        ? pause.durationSeconds
         : 0,
   }
 }
 
-function normalizeRecord(raw: Partial<DailyStudyRecord>, dateKey: string): DailyStudyRecord {
-  const status = STUDY_SESSION_STATUSES.includes(raw.status as StudySessionStatus)
-    ? (raw.status as StudySessionStatus)
+function normalizeRecord(raw: unknown, dateKey: string): DailyStudyRecord {
+  const record = isObject(raw) ? raw : {}
+  const status = STUDY_SESSION_STATUSES.includes(record.status as StudySessionStatus)
+    ? (record.status as StudySessionStatus)
     : "in-progress"
 
   return {
-    dateKey: typeof raw.dateKey === "string" ? raw.dateKey : dateKey,
-    presenceAt: typeof raw.presenceAt === "string" ? raw.presenceAt : null,
-    studyStartedAt: typeof raw.studyStartedAt === "string" ? raw.studyStartedAt : null,
+    dateKey: typeof record.dateKey === "string" ? record.dateKey : dateKey,
+    presenceAt: typeof record.presenceAt === "string" ? record.presenceAt : null,
+    studyStartedAt: typeof record.studyStartedAt === "string" ? record.studyStartedAt : null,
     activeSeconds:
-      typeof raw.activeSeconds === "number" && Number.isFinite(raw.activeSeconds)
-        ? raw.activeSeconds
+      typeof record.activeSeconds === "number" && Number.isFinite(record.activeSeconds)
+        ? record.activeSeconds
         : 0,
     pauseSeconds:
-      typeof raw.pauseSeconds === "number" && Number.isFinite(raw.pauseSeconds)
-        ? raw.pauseSeconds
+      typeof record.pauseSeconds === "number" && Number.isFinite(record.pauseSeconds)
+        ? record.pauseSeconds
+        : 0,
+    routineBreakSeconds:
+      typeof record.routineBreakSeconds === "number" && Number.isFinite(record.routineBreakSeconds)
+        ? record.routineBreakSeconds
         : 0,
     bonusSeconds:
-      typeof raw.bonusSeconds === "number" && Number.isFinite(raw.bonusSeconds)
-        ? raw.bonusSeconds
+      typeof record.bonusSeconds === "number" && Number.isFinite(record.bonusSeconds)
+        ? record.bonusSeconds
         : 0,
     status,
-    pauses: Array.isArray(raw.pauses) ? raw.pauses.map(normalizePause) : [],
-    completedAt: typeof raw.completedAt === "string" ? raw.completedAt : null,
-    canceledAt: typeof raw.canceledAt === "string" ? raw.canceledAt : null,
-    updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : new Date(0).toISOString(),
+    pauses: Array.isArray(record.pauses) ? record.pauses.map(normalizePause) : [],
+    completedAt: typeof record.completedAt === "string" ? record.completedAt : null,
+    canceledAt: typeof record.canceledAt === "string" ? record.canceledAt : null,
+    resumedAt: typeof record.resumedAt === "string" ? record.resumedAt : null,
+    updatedAt: typeof record.updatedAt === "string" ? record.updatedAt : new Date(0).toISOString(),
     activeSegmentStartedAt:
-      typeof raw.activeSegmentStartedAt === "string" ? raw.activeSegmentStartedAt : null,
+      typeof record.activeSegmentStartedAt === "string" ? record.activeSegmentStartedAt : null,
+    routineBreakSegmentStartedAt:
+      typeof record.routineBreakSegmentStartedAt === "string"
+        ? record.routineBreakSegmentStartedAt
+        : null,
+    routineBlockIndex:
+      typeof record.routineBlockIndex === "number" && Number.isFinite(record.routineBlockIndex)
+        ? Math.max(0, Math.floor(record.routineBlockIndex))
+        : 0,
+    routineBlockElapsedSeconds:
+      typeof record.routineBlockElapsedSeconds === "number" &&
+      Number.isFinite(record.routineBlockElapsedSeconds)
+        ? Math.max(0, Math.floor(record.routineBlockElapsedSeconds))
+        : 0,
+    awaitingNextBlock:
+      typeof record.awaitingNextBlock === "boolean" ? record.awaitingNextBlock : false,
   }
 }
 

@@ -17,7 +17,7 @@ export function GoalsSettingsCard({ settings, updateSettings }: GoalsSettingsCar
           <span className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
             <Target className="size-4" />
           </span>
-          <CardTitle className="text-base">Metas</CardTitle>
+          <CardTitle className="text-xl">Metas</CardTitle>
         </div>
         <CardDescription>Defina seus objetivos de estudo</CardDescription>
       </CardHeader>

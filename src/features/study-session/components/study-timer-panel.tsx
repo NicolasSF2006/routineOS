@@ -30,7 +30,7 @@ export function StudyTimerPanel({
             : "border-primary/25 bg-primary/5",
       )}
     >
-      <div className="flex items-center justify-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+      <div className="flex items-center justify-center gap-2 text-sm font-medium uppercase tracking-wide text-muted-foreground">
         <span
           className={cn(
             "size-2 rounded-full",
@@ -39,13 +39,17 @@ export function StudyTimerPanel({
         />
         {controlState === "pausado"
           ? "Pausado"
+          : controlState === "aguardando"
+            ? "Aguardando próxima etapa"
+            : controlState === "cancelado"
+              ? "Cancelado"
           : controlState === "concluido"
             ? "Finalizado"
             : "Tempo ativo estudado"}
       </div>
       <p
         className={cn(
-          "mt-2 font-mono text-4xl font-semibold tabular-nums sm:text-5xl",
+          "mt-2 font-mono text-2xl font-semibold tabular-nums sm:text-2xl",
           controlState === "pausado" ? "text-muted-foreground" : "text-foreground",
         )}
       >
@@ -62,11 +66,10 @@ export function StudyTimerPanel({
             style={{ width: `${progress}%` }}
           />
         </div>
-        <p className="mt-2 text-xs text-muted-foreground">
+        <p className="mt-2 text-sm text-muted-foreground">
           Meta diária: {formatDuration(goalSeconds)}
         </p>
       </div>
     </div>
   )
 }
-

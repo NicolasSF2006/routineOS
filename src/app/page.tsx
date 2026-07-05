@@ -13,7 +13,7 @@ export default function Page() {
   return (
     <div className="min-h-svh bg-background">
       <AppHeader activeView={view} onNavigate={setView} />
-      <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8">
+      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
         {view === "rotina" ? <RoutineView /> : null}
         {view === "calendario" ? <CalendarioView /> : null}
         {view === "configuracoes" ? <SettingsView /> : null}

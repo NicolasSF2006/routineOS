@@ -21,7 +21,7 @@ export function RoutineModeSettingsCard({
           <span className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
             <Briefcase className="size-4" />
           </span>
-          <CardTitle className="text-base">Modo da rotina</CardTitle>
+          <CardTitle className="text-xl">Modo da rotina</CardTitle>
         </div>
         <CardDescription>Como sua rotina se adapta à semana</CardDescription>
       </CardHeader>
@@ -43,7 +43,7 @@ export function RoutineModeSettingsCard({
             >
               <div className="flex flex-col">
                 <span className="text-sm font-medium text-foreground">{option.label}</span>
-                <span className="text-xs text-muted-foreground">{option.desc}</span>
+                <span className="text-sm text-muted-foreground">{option.desc}</span>
               </div>
               {option.soon ? (
                 <Badge variant="secondary" className="shrink-0">

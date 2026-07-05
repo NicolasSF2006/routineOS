@@ -28,7 +28,7 @@ export function RoutineSettingsCard({ hasCustomRoutine, resetRoutine }: RoutineS
           <span className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
             <CalendarClock className="size-4" />
           </span>
-          <CardTitle className="text-base">Rotina</CardTitle>
+          <CardTitle className="text-xl">Rotina</CardTitle>
         </div>
         <CardDescription>Fonte atual da rotina usada no app</CardDescription>
       </CardHeader>
@@ -36,7 +36,7 @@ export function RoutineSettingsCard({ hasCustomRoutine, resetRoutine }: RoutineS
         <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-muted/30 p-3">
           <div className="flex flex-col">
             <span className="text-sm font-medium text-foreground">Tipo da rotina</span>
-            <span className="text-xs text-muted-foreground">
+            <span className="text-sm text-muted-foreground">
               {hasCustomRoutine
                 ? "A aplicação está usando uma rotina personalizada."
                 : "A aplicação está usando a rotina padrão."}

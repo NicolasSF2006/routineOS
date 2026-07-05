@@ -25,7 +25,7 @@ export function AppearanceSettingsCard({ theme, setTheme }: AppearanceSettingsCa
           <span className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
             <Palette className="size-4" />
           </span>
-          <CardTitle className="text-base">Aparência</CardTitle>
+          <CardTitle className="text-xl">Aparência</CardTitle>
         </div>
         <CardDescription>Escolha o tema da aplicação</CardDescription>
       </CardHeader>

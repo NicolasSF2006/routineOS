@@ -54,24 +54,25 @@ export function CalendarStats({ monthStats }: CalendarStatsProps) {
   ] as const
 
   return (
-    <div className="grid grid-cols-2 gap-3">
+    <div className="grid flex-1 auto-rows-fr grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-2">
       {statItems.map((item) => {
         const Icon = item.icon
 
         return (
           <div
             key={item.key}
-            className="flex flex-col gap-1 rounded-xl border border-border/70 bg-card p-3"
+            className="flex min-h-28 flex-col justify-between gap-4 rounded-xl border border-border/70 bg-card/80 p-5 shadow-sm"
           >
-            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Icon className={cn("size-3.5", item.tone)} />
+            <span className="flex items-center gap-2 text-base leading-tight text-muted-foreground">
+              <Icon className={cn("size-4 shrink-0", item.tone)} />
               {item.label}
             </span>
-            <span className="text-xl font-semibold text-foreground">{item.value}</span>
+            <span className="whitespace-nowrap text-xl font-semibold tracking-tight text-foreground">
+              {item.value}
+            </span>
           </div>
         )
       })}
     </div>
   )
 }
-

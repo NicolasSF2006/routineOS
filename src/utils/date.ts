@@ -60,8 +60,11 @@ export function formatTime(iso: string | null): string {
 }
 
 export function formatDuration(totalSeconds: number): string {
-  const h = Math.floor(totalSeconds / 3600)
-  const m = Math.floor((totalSeconds % 3600) / 60)
+  const safeSeconds = Math.max(0, Math.floor(totalSeconds))
+  if (safeSeconds > 0 && safeSeconds < 60) return `${safeSeconds}s`
+
+  const h = Math.floor(safeSeconds / 3600)
+  const m = Math.floor((safeSeconds % 3600) / 60)
   if (h === 0) return `${m}min`
   return `${h}h ${String(m).padStart(2, "0")}min`
 }

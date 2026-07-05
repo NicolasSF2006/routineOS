@@ -44,6 +44,8 @@
   --color-status-correto: var(--status-correto);
   --color-status-pausas: var(--status-pausas);
   --color-status-acima: var(--status-acima);
+  --color-status-prevista: var(--status-prevista);
+  --color-status-retomado: var(--status-retomado);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -84,6 +86,8 @@
   --status-correto: oklch(0.6 0.14 150);
   --status-pausas: oklch(0.67 0.16 55);
   --status-acima: oklch(0.55 0.17 300);
+  --status-prevista: oklch(0.55 0.13 215);
+  --status-retomado: oklch(0.58 0.16 285);
   --radius: 0.75rem;
   --sidebar: oklch(0.99 0.003 240);
   --sidebar-foreground: oklch(0.22 0.02 250);
@@ -126,6 +130,8 @@
   --status-correto: oklch(0.7 0.14 150);
   --status-pausas: oklch(0.74 0.16 55);
   --status-acima: oklch(0.66 0.16 300);
+  --status-prevista: oklch(0.7 0.13 215);
+  --status-retomado: oklch(0.72 0.16 285);
   --sidebar: oklch(0.2 0.02 250);
   --sidebar-foreground: oklch(0.96 0.005 240);
   --sidebar-primary: oklch(0.68 0.13 210);

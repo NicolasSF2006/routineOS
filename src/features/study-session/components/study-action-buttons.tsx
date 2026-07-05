@@ -1,30 +1,63 @@
-import { CheckCircle2, Flag, Pause, Play, RotateCcw, X } from "lucide-react"
+import { CheckCircle2, Flag, Pause, Play, SkipForward, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Label } from "@/components/ui/label"
 import type { ControlState } from "@/types/study"
 
 interface StudyActionButtonsProps {
   controlState: ControlState
   metaReached: boolean
+  completedTime: string | null
+  hasNextBlock: boolean
+  nextBlockIsBreak: boolean
+  autoAdvance: boolean
+  onAutoAdvanceChange: (checked: boolean) => void
   markPresence: () => void
   startStudy: () => void
   pauseStudy: () => void
   resumeStudy: () => void
   completeStudy: () => void
-  cancelDay: () => void
-  resetDay: () => void
+  requestCancelDay: () => void
+  requestResumeCanceledDay: () => void
+  advanceRoutineBlock: () => void
 }
 
 export function StudyActionButtons({
   controlState,
   metaReached,
+  completedTime,
+  hasNextBlock,
+  nextBlockIsBreak,
+  autoAdvance,
+  onAutoAdvanceChange,
   markPresence,
   startStudy,
   pauseStudy,
   resumeStudy,
   completeStudy,
-  cancelDay,
-  resetDay,
+  requestCancelDay,
+  requestResumeCanceledDay,
+  advanceRoutineBlock,
 }: StudyActionButtonsProps) {
+  const showAutoAdvance =
+    controlState === "presente" ||
+    controlState === "estudando" ||
+    controlState === "pausado" ||
+    controlState === "aguardando"
+
+  const nextLabel = nextBlockIsBreak ? "Próxima pausa" : "Próxima tarefa"
+
+  const autoAdvanceCheckbox = showAutoAdvance ? (
+    <Label className="mt-1 flex items-center gap-2 rounded-lg border border-border/70 bg-muted/30 px-3 py-2 text-sm text-foreground">
+      <input
+        type="checkbox"
+        checked={autoAdvance}
+        onChange={(event) => onAutoAdvanceChange(event.target.checked)}
+        className="size-4 accent-primary"
+      />
+      Avançar tarefas automaticamente
+    </Label>
+  ) : null
+
   return (
     <div className="flex flex-col gap-2">
       {controlState === "inicial" ? (
@@ -34,47 +67,77 @@ export function StudyActionButtons({
       ) : null}
 
       {controlState === "presente" ? (
-        <Button size="lg" className="w-full" onClick={startStudy}>
-          <Play className="size-4" /> Começar Estudos
-        </Button>
+        <>
+          <Button size="lg" className="w-full" onClick={startStudy}>
+            <Play className="size-4" /> Começar Estudos
+          </Button>
+          {autoAdvanceCheckbox}
+        </>
       ) : null}
 
       {controlState === "estudando" && !metaReached ? (
-        <Button size="lg" className="w-full" onClick={pauseStudy}>
-          <Pause className="size-4" /> Pausar Estudos
-        </Button>
+        <>
+          <Button size="lg" className="w-full" onClick={pauseStudy}>
+            <Pause className="size-4" /> Pausar Estudos
+          </Button>
+          {autoAdvanceCheckbox}
+        </>
       ) : null}
 
       {controlState === "pausado" && !metaReached ? (
-        <Button size="lg" className="w-full" onClick={resumeStudy}>
-          <Play className="size-4" /> Retomar Estudos
-        </Button>
+        <>
+          <Button size="lg" className="w-full" onClick={resumeStudy}>
+            <Play className="size-4" /> Retomar Estudos
+          </Button>
+          {autoAdvanceCheckbox}
+        </>
       ) : null}
 
-      {metaReached && (controlState === "estudando" || controlState === "pausado") ? (
+      {controlState === "aguardando" && !metaReached ? (
+        <>
+          {hasNextBlock ? (
+            <Button size="lg" className="w-full" onClick={advanceRoutineBlock}>
+              <SkipForward className="size-4" /> {nextLabel}
+            </Button>
+          ) : (
+            <div className="flex items-center justify-center rounded-xl bg-muted/60 px-4 py-3 text-sm font-medium text-muted-foreground">
+              Rotina do dia finalizada.
+            </div>
+          )}
+          {autoAdvanceCheckbox}
+        </>
+      ) : null}
+
+      {metaReached &&
+      (controlState === "estudando" ||
+        controlState === "pausado" ||
+        controlState === "aguardando") ? (
         <Button size="lg" className="w-full" onClick={completeStudy}>
           <CheckCircle2 className="size-4" /> Concluir Estudos
         </Button>
       ) : null}
 
-      {controlState === "estudando" || controlState === "pausado" ? (
-        <Button size="lg" variant="destructive" className="w-full" onClick={cancelDay}>
-          <X className="size-4" /> Cancelar estudo de hoje
+      {(controlState === "estudando" || controlState === "pausado" || controlState === "aguardando") && !metaReached ? (
+        <Button size="lg" variant="destructive" className="w-full" onClick={requestCancelDay}>
+          <X className="size-4" /> Cancelar dia de estudo
+        </Button>
+      ) : null}
+
+      {controlState === "cancelado" ? (
+        <Button size="lg" className="w-full" onClick={requestResumeCanceledDay}>
+          <Play className="size-4" /> Retomar dia de estudo
         </Button>
       ) : null}
 
       {controlState === "concluido" ? (
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center justify-center gap-2 rounded-xl bg-status-correto/10 px-4 py-3 text-sm font-medium text-foreground">
+        <div className="flex flex-col gap-1.5 rounded-xl bg-status-correto/10 px-4 py-3 text-center text-sm">
+          <div className="flex items-center justify-center gap-2 font-medium text-foreground">
             <CheckCircle2 className="size-4 text-status-correto" />
-            Estudos concluídos — bom trabalho!
+            {completedTime ? `Dia concluído às ${completedTime}` : "Dia concluído"}
           </div>
-          <Button variant="outline" className="w-full" onClick={resetDay}>
-            <RotateCcw className="size-4" /> Reiniciar dia
-          </Button>
+          <span className="text-muted-foreground">Meta diária alcançada.</span>
         </div>
       ) : null}
     </div>
   )
 }
-

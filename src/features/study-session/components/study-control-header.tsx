@@ -7,7 +7,7 @@ export function StudyControlHeader() {
         <span className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
           <Clock className="size-4" />
         </span>
-        <h3 className="text-sm font-semibold text-foreground">Controle de estudos</h3>
+        <h3 className="text-xl font-semibold text-foreground">Controle de estudos</h3>
       </div>
     </div>
   )

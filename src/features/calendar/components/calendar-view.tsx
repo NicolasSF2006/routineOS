@@ -17,7 +17,7 @@ import { useCalendarRecords } from "@/features/calendar/hooks/use-calendar-recor
 import { useRoutine } from "@/features/routine/hooks/use-routine"
 import { computeMonthStats } from "@/features/study-session/utils/study-session"
 import { useStudySettings } from "@/hooks/use-study-settings"
-import { getCurrentMonthMeta, getMonthLabel } from "@/utils/date"
+import { getCurrentMonthMeta } from "@/utils/date"
 
 export function CalendarioView() {
   const { settings, hydrated } = useStudySettings()
@@ -27,7 +27,6 @@ export function CalendarioView() {
   const { records, nowMs } = useCalendarRecords()
 
   const { year, month } = getCurrentMonthMeta()
-  const monthLabel = getMonthLabel(year, month)
 
   const monthStats = computeMonthStats(year, month, settings, records, routine)
 
@@ -46,10 +45,10 @@ export function CalendarioView() {
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeading title="Calendário" description={`Visão mensal do seu progresso em ${monthLabel}.`} />
+      <PageHeading title="Calendário" align="center" />
 
-      <div className="grid gap-6 lg:grid-cols-[240px_1fr_260px]">
-        <div className="order-2 lg:order-1">
+      <div className="grid items-stretch gap-6 lg:grid-cols-[360px_minmax(430px,1fr)_360px]">
+        <div className="order-2 h-full lg:order-1">
           <Card className="p-0 lg:hidden">
             <Accordion>
               <AccordionItem value="legend" className="border-none">
@@ -62,8 +61,8 @@ export function CalendarioView() {
               </AccordionItem>
             </Accordion>
           </Card>
-          <Card className="hidden p-4 lg:block">
-            <h3 className="mb-3 text-sm font-semibold text-foreground">Legenda de cores</h3>
+          <Card className="hidden h-full p-4 lg:block">
+            <h3 className="mb-3 text-xl font-semibold text-foreground">Legenda de cores</h3>
             <CalendarLegend />
           </Card>
         </div>
@@ -77,9 +76,9 @@ export function CalendarioView() {
           onSelectDay={handleSelect}
         />
 
-        <div className="order-3">
-          <Card className="p-4">
-            <h3 className="mb-3 text-sm font-semibold text-foreground">Estatísticas do mês</h3>
+        <div className="order-3 h-full">
+          <Card className="flex h-full flex-col p-4">
+            <h3 className="mb-4 text-xl font-semibold text-foreground">Estatísticas do mês</h3>
             <CalendarStats monthStats={monthStats} />
           </Card>
         </div>

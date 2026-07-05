@@ -13,18 +13,16 @@ import type {
 const DEFAULT_TIMESTAMP = "2026-01-01T00:00:00.000Z"
 
 export const WEEK_DAYS: WeekDay[] = [
+  { key: "sunday", label: "Domingo", short: "Dom" },
   { key: "monday", label: "Segunda", short: "Seg" },
   { key: "tuesday", label: "Terça", short: "Ter" },
   { key: "wednesday", label: "Quarta", short: "Qua" },
   { key: "thursday", label: "Quinta", short: "Qui" },
   { key: "friday", label: "Sexta", short: "Sex" },
+  { key: "saturday", label: "Sábado", short: "Sáb" },
 ]
 
-export const ALL_WEEK_DAYS: WeekDay[] = [
-  ...WEEK_DAYS,
-  { key: "saturday", label: "Sábado", short: "Sáb" },
-  { key: "sunday", label: "Domingo", short: "Dom" },
-]
+export const ALL_WEEK_DAYS: WeekDay[] = WEEK_DAYS
 
 export const WEEKDAY_BY_DATE_INDEX: Record<number, Weekday> = {
   0: "sunday",

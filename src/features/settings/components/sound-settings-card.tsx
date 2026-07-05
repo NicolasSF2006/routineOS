@@ -20,7 +20,7 @@ export function SoundSettingsCard({ settings, updateSettings }: SoundSettingsCar
           <span className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
             <Volume2 className="size-4" />
           </span>
-          <CardTitle className="text-base">Sons</CardTitle>
+          <CardTitle className="text-xl">Sons</CardTitle>
         </div>
         <CardDescription>Notificações sonoras da rotina</CardDescription>
       </CardHeader>

@@ -6,7 +6,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
 } from "@/components/ui/dialog"
 import { STATUS_META } from "@/constants/calendar"
 import { buildDayDetail } from "@/features/study-session/utils/study-session"
@@ -62,6 +61,7 @@ export function DayDetailDialog({
   const detail = buildDayDetail(dateKey, day, record, settings, nowMs, routine)
   const meta = STATUS_META[detail.status]
   const monthName = getMonthLabel(year, month).split(" ")[0]
+  const showStudyStart = Boolean(detail.studyStart && record?.status !== "completed")
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -70,7 +70,6 @@ export function DayDetailDialog({
           <DialogTitle className="flex items-center gap-2">
             {day} de {monthName}
           </DialogTitle>
-          <DialogDescription>Detalhes do dia de estudos</DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-col gap-4">
@@ -78,13 +77,15 @@ export function DayDetailDialog({
             <span className={cn("size-3 rounded-full", meta.swatch)} />
             <div className="flex flex-col">
               <span className="text-sm font-semibold">{meta.label}</span>
-              <span className="text-xs opacity-90">{detail.statusReason}</span>
+              <span className="text-sm opacity-90">{detail.statusReason}</span>
             </div>
           </div>
 
           <div className="flex flex-col gap-2">
             <DetailRow icon={LogIn} label="Horário da presença" value={detail.presence ?? "—"} />
-            <DetailRow icon={Play} label="Início dos estudos" value={detail.studyStart ?? "—"} />
+            {showStudyStart ? (
+              <DetailRow icon={Play} label="Início dos estudos" value={detail.studyStart ?? "—"} />
+            ) : null}
             <DetailRow icon={Clock} label="Tempo estudado" value={detail.studied ?? "—"} />
             <DetailRow icon={PauseCircle} label="Tempo pausado" value={detail.paused ?? "—"} />
             <DetailRow
@@ -92,7 +93,9 @@ export function DayDetailDialog({
               label="Pausas realizadas"
               value={detail.breaks > 0 ? String(detail.breaks) : "—"}
             />
-            <DetailRow icon={Sparkles} label="Horas bônus" value={detail.bonus ?? "—"} />
+            {detail.bonus ? (
+              <DetailRow icon={Sparkles} label="Horas bônus" value={detail.bonus} />
+            ) : null}
             {detail.canceledAt ? (
               <DetailRow icon={XCircle} label="Cancelado às" value={detail.canceledAt} />
             ) : null}
@@ -100,14 +103,14 @@ export function DayDetailDialog({
 
           {detail.pauseList.length > 0 ? (
             <div className="flex flex-col gap-2">
-              <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              <span className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
                 Lista de pausas
               </span>
               <div className="flex flex-col gap-1.5">
                 {detail.pauseList.map((pause, index) => (
                   <div
                     key={`${pause.start}-${index}`}
-                    className="flex items-center justify-between rounded-lg border border-border/70 px-3 py-2 text-xs"
+                    className="flex items-center justify-between rounded-lg border border-border/70 px-3 py-2 text-sm"
                   >
                     <span className="text-muted-foreground">
                       {pause.start} → {pause.end}

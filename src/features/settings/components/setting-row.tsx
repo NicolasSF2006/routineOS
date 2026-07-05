@@ -12,7 +12,7 @@ export function SettingRow({ label, description, children, disabled }: SettingRo
     <div className={cn("flex items-center justify-between gap-4 py-3", disabled && "opacity-60")}>
       <div className="flex flex-col">
         <span className="text-sm font-medium text-foreground">{label}</span>
-        {description ? <span className="text-xs text-muted-foreground">{description}</span> : null}
+        {description ? <span className="text-sm text-muted-foreground">{description}</span> : null}
       </div>
       {children}
     </div>
