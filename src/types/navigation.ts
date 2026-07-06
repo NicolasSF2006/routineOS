@@ -1,6 +1,6 @@
 import type { LucideIcon } from "lucide-react"
 
-export type ViewKey = "rotina" | "calendario" | "configuracoes" | "configurar-rotina"
+export type ViewKey = "rotina" | "calendario" | "configuracoes" | "configurar-rotina" | "mentor"
 
 export interface NavigationItem {
   key: ViewKey
@@ -8,4 +8,3 @@ export interface NavigationItem {
   description: string
   icon: LucideIcon
 }
-

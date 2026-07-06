@@ -18,6 +18,7 @@ import type {
   SoundPreference,
 } from "@/types/study"
 import type { Theme } from "@/types/theme"
+import type { MentorMessage } from "@/features/mentor/types"
 
 const ROUTINE_MODE_COMPAT: Record<string, RoutineMode> = {
   "sem-trabalho": "no-work",
@@ -31,6 +32,7 @@ const ROUTINE_MODE_COMPAT: Record<string, RoutineMode> = {
 const STUDY_SESSION_STATUSES: StudySessionStatus[] = ["in-progress", "completed", "canceled"]
 const ROUTINE_BLOCK_TYPES: RoutineBlockType[] = ["study", "short-break", "long-break", "lunch", "project", "other"]
 const WEEKDAYS: Weekday[] = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+const MENTOR_MESSAGE_ROLES = ["user", "assistant"] as const
 
 function readJson<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback
@@ -69,6 +71,10 @@ function notifyThemeChanged(): void {
   dispatchStorageEvent(STORAGE_EVENTS.themeChanged)
 }
 
+function notifyMentorChatChanged(): void {
+  dispatchStorageEvent(STORAGE_EVENTS.mentorChatChanged)
+}
+
 function notifyAppDataChanged(): void {
   dispatchStorageEvent(STORAGE_EVENTS.appDataChanged)
 }
@@ -78,6 +84,7 @@ function notifyAllDataChanged(): void {
   notifyRecordsChanged()
   notifyRoutineChanged()
   notifyThemeChanged()
+  notifyMentorChatChanged()
   notifyAppDataChanged()
 }
 
@@ -353,6 +360,32 @@ function normalizeRecords(raw: unknown): Record<string, DailyStudyRecord> {
   )
 }
 
+function normalizeMentorMessage(raw: unknown, index: number): MentorMessage | null {
+  if (!isObject(raw)) return null
+
+  const role = typeof raw.role === "string" && MENTOR_MESSAGE_ROLES.includes(raw.role as MentorMessage["role"])
+    ? (raw.role as MentorMessage["role"])
+    : null
+  const content = typeof raw.content === "string" ? raw.content.trim() : ""
+
+  if (!role || content.length === 0) return null
+
+  return {
+    id: normalizeString(raw.id, `mentor-message-${index + 1}`),
+    role,
+    content,
+    createdAt: normalizeString(raw.createdAt, new Date(0).toISOString()),
+  }
+}
+
+function normalizeMentorChat(raw: unknown): MentorMessage[] {
+  if (!Array.isArray(raw)) return []
+
+  return raw
+    .map((message, index) => normalizeMentorMessage(message, index))
+    .filter((message): message is MentorMessage => message !== null)
+}
+
 function isTheme(value: unknown): value is Theme {
   return value === "light" || value === "dark"
 }
@@ -434,6 +467,21 @@ export function resetOnboarding(): void {
   notifyAppDataChanged()
 }
 
+export function loadMentorChat(): MentorMessage[] {
+  return normalizeMentorChat(readJson<unknown>(STORAGE_KEYS.mentorChat, []))
+}
+
+export function saveMentorChat(messages: MentorMessage[]): void {
+  writeJson(STORAGE_KEYS.mentorChat, normalizeMentorChat(messages))
+  notifyMentorChatChanged()
+}
+
+export function clearMentorChat(): void {
+  if (typeof window === "undefined") return
+  window.localStorage.removeItem(STORAGE_KEYS.mentorChat)
+  notifyMentorChatChanged()
+}
+
 export interface RoutineOSBackup {
   app: "RoutineOS"
   schemaVersion: number
@@ -445,6 +493,7 @@ export interface RoutineOSBackup {
     view: string | null
     theme: Theme | null
     onboardingCompleted: boolean
+    mentorChat: MentorMessage[]
   }
 }
 
@@ -466,6 +515,7 @@ function normalizeBackup(raw: unknown): RoutineOSBackup | null {
       view: typeof data.view === "string" ? data.view : null,
       theme: isTheme(data.theme) ? data.theme : null,
       onboardingCompleted: data.onboardingCompleted === true,
+      mentorChat: normalizeMentorChat(data.mentorChat),
     },
   }
 }
@@ -485,6 +535,7 @@ export function createRoutineOSBackup(): RoutineOSBackup {
       view: typeof view === "string" ? view : null,
       theme: isTheme(theme) ? theme : null,
       onboardingCompleted: hasCompletedOnboarding(),
+      mentorChat: loadMentorChat(),
     },
   }
 }
@@ -497,6 +548,7 @@ export function importRoutineOSBackup(raw: unknown): RoutineOSBackup {
 
   writeJson(STORAGE_KEYS.settings, backup.data.settings)
   writeJson(STORAGE_KEYS.records, backup.data.records)
+  writeJson(STORAGE_KEYS.mentorChat, backup.data.mentorChat)
 
   if (backup.data.routine) {
     writeJson(STORAGE_KEYS.routine, backup.data.routine)
@@ -537,6 +589,7 @@ export function resetStoredAppData(): void {
   window.localStorage.removeItem(STORAGE_KEYS.view)
   window.localStorage.removeItem(STORAGE_KEYS.theme)
   window.localStorage.removeItem(STORAGE_KEYS.onboardingCompleted)
+  window.localStorage.removeItem(STORAGE_KEYS.mentorChat)
 
   notifyAllDataChanged()
 }

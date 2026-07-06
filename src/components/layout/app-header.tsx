@@ -32,8 +32,8 @@ export function AppHeader({
 
   return (
     <header className="sticky top-0 z-40 border-b border-border/80 bg-background/85 backdrop-blur-md">
-      <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:h-16 sm:px-6">
-        <div className="flex w-16 items-center gap-2 sm:w-20">
+      <div className="mx-auto flex h-14 max-w-7xl items-center justify-between gap-3 px-4 sm:h-16 sm:px-6">
+        <div className="flex w-16 items-center gap-2 sm:w-20 lg:w-auto lg:shrink-0">
           <button
             type="button"
             onClick={() => onNavigate("rotina")}
@@ -50,16 +50,46 @@ export function AppHeader({
               className="size-8 object-contain"
             />
           </button>
+          <span className="hidden text-xl font-semibold leading-tight text-foreground lg:block">
+            RoutineOS
+          </span>
         </div>
 
-        <div className="flex min-w-0 flex-1 flex-col items-center px-3">
+        <div className="flex min-w-0 flex-1 flex-col items-center px-3 lg:hidden">
           <h1 className="truncate text-xl font-semibold leading-tight text-foreground">
             RoutineOS
           </h1>
         </div>
 
-        <div className="flex w-16 items-center justify-end gap-1 sm:w-20">
+        <nav
+          className="hidden min-w-0 flex-1 items-center justify-end gap-1 lg:flex"
+          aria-label="Navegação principal"
+        >
+          {NAV_ITEMS.map((item) => {
+            const Icon = item.icon
+            const isActive = item.key === activeView
 
+            return (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => handleNavigate(item.key)}
+                aria-current={isActive ? "page" : undefined}
+                className={cn(
+                  "inline-flex min-h-10 items-center gap-2 rounded-xl px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  isActive
+                    ? "bg-accent text-accent-foreground"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                )}
+              >
+                <Icon className="size-4" aria-hidden="true" />
+                <span>{item.label}</span>
+              </button>
+            )
+          })}
+        </nav>
+
+        <div className="flex w-16 items-center justify-end gap-1 sm:w-20 lg:hidden">
           <Sheet open={open} onOpenChange={setOpen}>
             <SheetTrigger
               render={

@@ -5,6 +5,7 @@ export const STORAGE_KEYS = {
   view: "routineos-current-view",
   theme: "routine-theme",
   onboardingCompleted: "routineos-onboarding-completed",
+  mentorChat: "routineos-mentor-chat",
 } as const
 
 export const STORAGE_EVENTS = {
@@ -13,6 +14,7 @@ export const STORAGE_EVENTS = {
   routineChanged: "routineos-routine-changed",
   themeChanged: "routineos-theme-changed",
   appDataChanged: "routineos-app-data-changed",
+  mentorChatChanged: "routineos-mentor-chat-changed",
 } as const
 
-export const BACKUP_SCHEMA_VERSION = 1
+export const BACKUP_SCHEMA_VERSION = 2
