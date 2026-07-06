@@ -554,6 +554,12 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
   }
 
   const clearCurrentMonthRoutine = () => {
+    const confirmed = window.confirm(
+      "Limpar vai remover todos os blocos do mês atual no rascunho. Clique em Salvar depois para persistir a limpeza. Deseja continuar?",
+    )
+
+    if (!confirmed) return
+
     const weekStartKeys = getVisibleMonthWeekStartKeys(
       selectedDate.getFullYear(),
       selectedDate.getMonth(),

@@ -1,6 +1,6 @@
 import { DEFAULT_SETTINGS, DEFAULT_SOUND_PREFERENCES, MAX_CUSTOM_SOUND_SIZE_BYTES } from "@/constants/settings"
 import { DEFAULT_ROUTINE } from "@/constants/routine"
-import { STORAGE_EVENTS, STORAGE_KEYS } from "@/constants/storage"
+import { BACKUP_SCHEMA_VERSION, STORAGE_EVENTS, STORAGE_KEYS } from "@/constants/storage"
 import type {
   DailyStudyRecord,
   Routine,
@@ -17,6 +17,7 @@ import type {
   SoundEventKey,
   SoundPreference,
 } from "@/types/study"
+import type { Theme } from "@/types/theme"
 
 const ROUTINE_MODE_COMPAT: Record<string, RoutineMode> = {
   "sem-trabalho": "no-work",
@@ -47,16 +48,38 @@ function writeJson(key: string, value: unknown): void {
   window.localStorage.setItem(key, JSON.stringify(value))
 }
 
-function notifyRecordsChanged(): void {
+function dispatchStorageEvent(eventName: string): void {
   if (typeof window === "undefined") return
-  window.dispatchEvent(new Event(STORAGE_EVENTS.recordsChanged))
+  window.dispatchEvent(new Event(eventName))
+}
+
+function notifySettingsChanged(): void {
+  dispatchStorageEvent(STORAGE_EVENTS.settingsChanged)
+}
+
+function notifyRecordsChanged(): void {
+  dispatchStorageEvent(STORAGE_EVENTS.recordsChanged)
 }
 
 function notifyRoutineChanged(): void {
-  if (typeof window === "undefined") return
-  window.dispatchEvent(new Event(STORAGE_EVENTS.routineChanged))
+  dispatchStorageEvent(STORAGE_EVENTS.routineChanged)
 }
 
+function notifyThemeChanged(): void {
+  dispatchStorageEvent(STORAGE_EVENTS.themeChanged)
+}
+
+function notifyAppDataChanged(): void {
+  dispatchStorageEvent(STORAGE_EVENTS.appDataChanged)
+}
+
+function notifyAllDataChanged(): void {
+  notifySettingsChanged()
+  notifyRecordsChanged()
+  notifyRoutineChanged()
+  notifyThemeChanged()
+  notifyAppDataChanged()
+}
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
@@ -322,20 +345,34 @@ function normalizeRecord(raw: unknown, dateKey: string): DailyStudyRecord {
   }
 }
 
+function normalizeRecords(raw: unknown): Record<string, DailyStudyRecord> {
+  if (!isObject(raw)) return {}
+
+  return Object.fromEntries(
+    Object.entries(raw).map(([dateKey, record]) => [dateKey, normalizeRecord(record, dateKey)]),
+  )
+}
+
+function isTheme(value: unknown): value is Theme {
+  return value === "light" || value === "dark"
+}
+
 export function loadSettings(): StudySettings {
   return normalizeSettings(readJson<Partial<StudySettings>>(STORAGE_KEYS.settings, {}))
 }
 
 export function saveSettings(settings: StudySettings): void {
   writeJson(STORAGE_KEYS.settings, settings)
+  notifySettingsChanged()
+}
+
+export function restoreDefaultSettings(): void {
+  writeJson(STORAGE_KEYS.settings, DEFAULT_SETTINGS)
+  notifySettingsChanged()
 }
 
 export function loadAllRecords(): Record<string, DailyStudyRecord> {
-  const records = readJson<Record<string, Partial<DailyStudyRecord>>>(STORAGE_KEYS.records, {})
-
-  return Object.fromEntries(
-    Object.entries(records).map(([dateKey, record]) => [dateKey, normalizeRecord(record, dateKey)]),
-  )
+  return normalizeRecords(readJson<unknown>(STORAGE_KEYS.records, {}))
 }
 
 export function loadRecord(dateKey: string): DailyStudyRecord | null {
@@ -378,4 +415,101 @@ export function clearStoredRoutine(): void {
 
 export function getActiveRoutine(): Routine {
   return getStoredRoutine() ?? DEFAULT_ROUTINE
+}
+
+export interface RoutineOSBackup {
+  app: "RoutineOS"
+  schemaVersion: number
+  exportedAt: string
+  data: {
+    settings: StudySettings
+    records: Record<string, DailyStudyRecord>
+    routine: Routine | null
+    view: string | null
+    theme: Theme | null
+  }
+}
+
+function normalizeBackup(raw: unknown): RoutineOSBackup | null {
+  if (!isObject(raw)) return null
+  if (raw.app !== "RoutineOS") return null
+  if (!isObject(raw.data)) return null
+
+  const data = raw.data
+
+  return {
+    app: "RoutineOS",
+    schemaVersion: normalizeNumber(raw.schemaVersion, BACKUP_SCHEMA_VERSION),
+    exportedAt: normalizeString(raw.exportedAt, new Date().toISOString()),
+    data: {
+      settings: normalizeSettings(data.settings),
+      records: normalizeRecords(data.records),
+      routine: data.routine === null ? null : normalizeRoutine(data.routine),
+      view: typeof data.view === "string" ? data.view : null,
+      theme: isTheme(data.theme) ? data.theme : null,
+    },
+  }
+}
+
+export function createRoutineOSBackup(): RoutineOSBackup {
+  const theme = typeof window === "undefined" ? null : window.localStorage.getItem(STORAGE_KEYS.theme)
+  const view = typeof window === "undefined" ? null : window.localStorage.getItem(STORAGE_KEYS.view)
+
+  return {
+    app: "RoutineOS",
+    schemaVersion: BACKUP_SCHEMA_VERSION,
+    exportedAt: new Date().toISOString(),
+    data: {
+      settings: loadSettings(),
+      records: loadAllRecords(),
+      routine: getStoredRoutine(),
+      view: typeof view === "string" ? view : null,
+      theme: isTheme(theme) ? theme : null,
+    },
+  }
+}
+
+export function importRoutineOSBackup(raw: unknown): RoutineOSBackup {
+  const backup = normalizeBackup(raw)
+  if (!backup) {
+    throw new Error("Arquivo de backup inválido.")
+  }
+
+  writeJson(STORAGE_KEYS.settings, backup.data.settings)
+  writeJson(STORAGE_KEYS.records, backup.data.records)
+
+  if (backup.data.routine) {
+    writeJson(STORAGE_KEYS.routine, backup.data.routine)
+  } else if (typeof window !== "undefined") {
+    window.localStorage.removeItem(STORAGE_KEYS.routine)
+  }
+
+  if (typeof window !== "undefined") {
+    if (backup.data.view) {
+      window.localStorage.setItem(STORAGE_KEYS.view, backup.data.view)
+    } else {
+      window.localStorage.removeItem(STORAGE_KEYS.view)
+    }
+
+    if (backup.data.theme) {
+      window.localStorage.setItem(STORAGE_KEYS.theme, backup.data.theme)
+    } else {
+      window.localStorage.removeItem(STORAGE_KEYS.theme)
+    }
+  }
+
+  notifyAllDataChanged()
+  return backup
+}
+
+export function resetStoredAppData(): void {
+  if (typeof window === "undefined") return
+
+  window.localStorage.removeItem(STORAGE_KEYS.settings)
+  window.localStorage.removeItem(STORAGE_KEYS.records)
+  window.localStorage.removeItem(STORAGE_KEYS.routine)
+  window.localStorage.removeItem(STORAGE_KEYS.view)
+  window.localStorage.removeItem(STORAGE_KEYS.theme)
+
+  notifyAllDataChanged()
 }

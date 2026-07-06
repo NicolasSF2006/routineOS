@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## v1.5.0
+
+- Adicionado card de Dados e backup nas Configurações.
+- Adicionada exportação de backup completo em JSON.
+- Adicionada importação de backup com validação e normalização dos dados.
+- Adicionado reset completo dos dados locais com confirmação.
+- Adicionada restauração das configurações para os valores padrão.
+- Adicionadas notificações internas para atualizar configurações, rotina, histórico e tema após importação/reset.
+- Adicionada confirmação antes de limpar a rotina do mês no configurador.
+
 ## v1.3.1
 
 - Adicionado drag-and-drop nativo no configurador visual de rotina.

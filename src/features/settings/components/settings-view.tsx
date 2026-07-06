@@ -3,6 +3,7 @@
 import { PageHeading } from "@/components/shared/page-heading"
 import { useTheme } from "@/components/providers/theme-provider"
 import { AppearanceSettingsCard } from "@/features/settings/components/appearance-settings-card"
+import { DataBackupSettingsCard } from "@/features/settings/components/data-backup-settings-card"
 import { GoalsSettingsCard } from "@/features/settings/components/goals-settings-card"
 import { RoutineSettingsCard } from "@/features/settings/components/routine-settings-card"
 import { SoundSettingsCard } from "@/features/settings/components/sound-settings-card"
@@ -40,6 +41,9 @@ export function SettingsView({ onNavigate }: SettingsViewProps) {
         />
         <GoalsSettingsCard settings={settings} updateSettings={updateSettings} />
         <AppearanceSettingsCard theme={theme} setTheme={setTheme} />
+        <div className="md:col-span-2">
+          <DataBackupSettingsCard />
+        </div>
       </div>
     </div>
   )
