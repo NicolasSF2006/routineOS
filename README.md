@@ -1,21 +1,90 @@
 # RoutineOS
 
-RoutineOS é um sistema operacional para organização da evolução pessoal, começando pela rotina de estudos.
+**RoutineOS** é uma aplicação web para organização e acompanhamento de rotinas de estudo.
 
-A aplicação organiza rotina de estudos, acompanha presença diária, controla tempo estudado com pausas, exibe progresso no calendário e mantém preferências locais.
+O projeto permite configurar rotinas semanais e mensais, acompanhar sessões de estudo, visualizar progresso em calendário, personalizar sons e manter os dados protegidos por backup local.
 
-## Tecnologias Utilizadas
+🔗 **Deploy:** https://routineos-app.vercel.app/  
+📦 **Repositório:** https://github.com/NicolasSF2006/routineOS
 
-- Next.js 16
-- React 19
+---
+
+## Sobre o projeto
+
+O RoutineOS foi desenvolvido com o objetivo de transformar a organização dos estudos em uma experiência mais visual, prática e personalizável.
+
+A aplicação funciona diretamente no navegador, utilizando persistência local para salvar rotinas, histórico, configurações, preferências de tema, sons personalizados e backups. O foco do projeto é oferecer uma experiência simples para o usuário, mas com funcionalidades completas o suficiente para uso real no dia a dia.
+
+---
+
+## Funcionalidades principais
+
+- Criação de rotinas de estudo por semana e mês.
+- Configurador visual de rotina com blocos personalizados.
+- Drag-and-drop para organizar tarefas, pausas, almoço, projetos e outros blocos.
+- Controle de sessão de estudo com início, pausa, conclusão, cancelamento e retomada.
+- Modo automático ou manual para avanço entre tarefas.
+- Calendário com histórico e status dos dias.
+- Configurações de aparência e tema.
+- Personalização de sons da rotina.
+- Importação de áudios personalizados.
+- Exportação e importação de backup em JSON.
+- Reset completo dos dados locais.
+- Tutorial inicial para novos usuários.
+- Persistência da última tela acessada.
+- Interface responsiva para desktop, tablet e mobile.
+
+---
+
+## Tecnologias utilizadas
+
+- Next.js
+- React
 - TypeScript
-- Tailwind CSS 4
-- shadcn/base-ui
-- lucide-react
-- LocalStorage para persistência local
-- Vercel Analytics em produção
+- Tailwind CSS
+- LocalStorage
+- Vercel
 
-## Como Executar
+---
+
+## Estrutura geral
+
+```txt
+src/
+├── app/
+├── components/
+│   ├── layout/
+│   ├── providers/
+│   ├── shared/
+│   └── ui/
+├── constants/
+├── features/
+│   ├── calendar/
+│   ├── onboarding/
+│   ├── routine/
+│   ├── routine-builder/
+│   ├── settings/
+│   └── study-session/
+├── lib/
+├── styles/
+└── types/
+```
+
+---
+
+## Como rodar localmente
+
+Clone o repositório:
+
+```bash
+git clone https://github.com/NicolasSF2006/routineOS.git
+```
+
+Entre na pasta do projeto:
+
+```bash
+cd routineOS
+```
 
 Instale as dependências:
 
@@ -23,52 +92,82 @@ Instale as dependências:
 npm install
 ```
 
-Execute o ambiente de desenvolvimento:
+Rode o servidor de desenvolvimento:
 
 ```bash
 npm run dev
 ```
 
-Acesse:
+Acesse no navegador:
 
 ```txt
 http://localhost:3000
 ```
 
-## Comandos Úteis
+---
+
+## Scripts disponíveis
+
+```bash
+npm run dev
+```
+
+Inicia o ambiente de desenvolvimento.
+
+```bash
+npm run build
+```
+
+Gera a versão de produção.
 
 ```bash
 npm run typecheck
-npm run build
-npm run start
 ```
 
-## Estrutura do Projeto
+Executa a verificação de tipos do TypeScript.
 
-```txt
-src/
-  app/                         Rotas e layout raiz do Next.js
-  components/
-    layout/                    Componentes de layout global
-    providers/                 Providers React globais
-    shared/                    Componentes compartilhados entre features
-    ui/                        Primitivos de interface
-  constants/                   Valores fixos reutilizáveis
-  features/
-    calendar/                  Calendário, estatísticas e detalhes do dia
-    routine/                   Rotina semanal e blocos de estudo
-    settings/                  Configurações da aplicação
-    study-session/             Controle e regras da sessão de estudo
-  hooks/                       Hooks globais reutilizáveis
-  lib/                         Infraestrutura e helpers base
-  styles/                      Estilos globais
-  types/                       Tipos compartilhados
-  utils/                       Funções puras de data, horário e formatação
-```
+---
 
-## Próximos Passos
+## Persistência de dados
 
-- Ampliar testes automatizados das regras de sessão e calendário.
-- Evoluir a edição da rotina sem acoplar UI e regras de negócio.
-- Revisar acessibilidade dos fluxos principais.
-- Preparar estratégia de migração caso a persistência deixe de ser local.
+O RoutineOS utiliza `localStorage` para armazenar os dados no próprio navegador do usuário.
+
+São salvos localmente:
+
+- rotina ativa;
+- histórico de estudos;
+- configurações;
+- tema;
+- sons personalizados;
+- última tela acessada;
+- status do tutorial inicial.
+
+A aplicação também possui recursos de **exportação** e **importação de backup**, permitindo que o usuário salve seus dados em um arquivo `.json`.
+
+---
+
+## Status do projeto
+
+Versão atual: **MVP v1.0.0**
+
+O projeto já possui as principais funcionalidades implementadas e está em fase de refinamento para apresentação em portfólio.
+
+---
+
+## Próximas melhorias possíveis
+
+- Rotinas modelo para novos usuários.
+- Melhorias de acessibilidade.
+- Relatórios mais detalhados de desempenho.
+- Estatísticas semanais e mensais avançadas.
+- Sincronização em nuvem.
+- Login de usuário.
+- Integração com notificações.
+
+---
+
+## Autor
+
+Desenvolvido por **Nicolas Silva Frazão**.
+
+GitHub: https://github.com/NicolasSF2006

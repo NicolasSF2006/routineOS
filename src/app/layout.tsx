@@ -6,25 +6,23 @@ import '@/styles/globals.css'
 
 
 export const metadata: Metadata = {
-  title: 'RoutineOS',
-  description: 'RoutineOS é um sistema operacional para organização da evolução pessoal, começando pela rotina de estudos.',
-  generator: 'RoutineOS',
-  icons: {
-    icon: [
-      {
-        url: '/icon-light-32x32.png',
-        media: '(prefers-color-scheme: light)',
-      },
-      {
-        url: '/icon-dark-32x32.png',
-        media: '(prefers-color-scheme: dark)',
-      },
-      {
-        url: '/icon.svg',
-        type: 'image/svg+xml',
-      },
-    ],
-    apple: '/apple-icon.png',
+  title: {
+    default: "RoutineOS — Rotina de estudos",
+    template: "%s | RoutineOS",
+  },
+  description:
+    "Organize sua rotina de estudos, acompanhe seu progresso e mantenha seus dados protegidos com backup local.",
+  applicationName: "RoutineOS",
+  authors: [{ name: "Nicolas Silva Frazão" }],
+  creator: "Nicolas Silva Frazão",
+  openGraph: {
+    title: "RoutineOS",
+    description:
+      "Aplicação web para organização de rotinas de estudo, acompanhamento de progresso e backup local.",
+    url: "https://routineos-app.vercel.app/",
+    siteName: "RoutineOS",
+    type: "website",
+    locale: "pt_BR",
   },
 }
 
