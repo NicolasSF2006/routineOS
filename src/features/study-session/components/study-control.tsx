@@ -105,10 +105,10 @@ export function StudyControl({
 
   return (
     <>
-      <Card className="overflow-hidden border-border/80">
+      <Card className="w-full max-w-full min-w-0 overflow-hidden border-border/80">
         <StudyControlHeader />
 
-        <div className="flex flex-col gap-5 p-5">
+        <div className="flex w-full max-w-full min-w-0 flex-col gap-5 p-4 sm:p-5">
           {selectedDateRelation === "future" ? (
             <p className="rounded-xl bg-muted/50 px-4 py-3 text-base text-muted-foreground">
               Você está visualizando uma data futura. A presença só pode ser marcada no dia atual.
@@ -129,16 +129,16 @@ export function StudyControl({
 
               {showCurrentBlock && currentBlock ? (
                 <div className="rounded-xl border border-border/70 bg-muted/30 p-3">
-                  <div className="flex items-start justify-between gap-3">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
                     <div className="min-w-0">
                       <p className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
                         {isCurrentBlockRoutineBreak ? "Pausa programada" : "Tarefa atual"}
                       </p>
-                      <p className="truncate text-sm font-semibold text-foreground">
+                      <p className="wrap-break-word text-sm font-semibold text-foreground">
                         {currentBlock.title}
                       </p>
                     </div>
-                    <span className="shrink-0 whitespace-nowrap text-sm font-medium text-muted-foreground">
+                    <span className="shrink-0 text-sm font-medium text-muted-foreground">
                       {formatDuration(currentBlockElapsedSeconds)} /{" "}
                       {formatDuration(currentBlockDurationSeconds)}
                     </span>

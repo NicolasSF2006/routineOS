@@ -31,43 +31,47 @@ export function CalendarGrid({
   const todayKey = getTodayDateKey()
 
   return (
-    <Card className="order-1 h-full p-4 lg:order-2">
-      <div className="mb-3 grid grid-cols-7 gap-1.5">
-        {WEEK_HEADERS.map((weekDay) => (
-          <div
-            key={weekDay}
-            className="py-1 text-center text-sm font-medium text-muted-foreground"
-          >
-            {weekDay}
+    <Card className="order-1 h-full w-full max-w-full min-w-0 overflow-hidden p-3 sm:p-4 xl:order-2">
+      <div className="w-full max-w-full overflow-x-auto overscroll-x-contain p-1">
+        <div className="min-w-[320px]">
+          <div className="mb-2 grid grid-cols-7 gap-1 sm:mb-3 sm:gap-1.5">
+            {WEEK_HEADERS.map((weekDay) => (
+              <div
+                key={weekDay}
+                className="py-1 text-center text-sm font-medium text-muted-foreground"
+              >
+                {weekDay}
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
-      <div className="grid grid-cols-7 gap-1.5">
-        {cells.map((day, index) => {
-          if (day === null) return <div key={`empty-${index}`} />
+          <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
+            {cells.map((day, index) => {
+              if (day === null) return <div key={`empty-${index}`} />
 
-          const dateKey = dateKeyFromParts(year, month, day)
-          const record = records[dateKey] ?? null
-          const status = deriveDayStatus(record, dateKey, settings, routine)
-          const meta = STATUS_META[status]
-          const isToday = dateKey === todayKey
+              const dateKey = dateKeyFromParts(year, month, day)
+              const record = records[dateKey] ?? null
+              const status = deriveDayStatus(record, dateKey, settings, routine)
+              const meta = STATUS_META[status]
+              const isToday = dateKey === todayKey
 
-          return (
-            <button
-              key={day}
-              type="button"
-              onClick={() => onSelectDay(day)}
-              className={cn(
-                "flex aspect-square flex-col items-center justify-center rounded-lg border text-sm font-medium transition-all hover:scale-[1.04] hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                meta.cell,
-                isToday && "border-cyan-400 ring-2 ring-cyan-400/70 ring-offset-2 ring-offset-background",
-              )}
-              aria-label={`Dia ${day}: ${meta.label}`}
-            >
-              {day}
-            </button>
-          )
-        })}
+              return (
+                <button
+                  key={day}
+                  type="button"
+                  onClick={() => onSelectDay(day)}
+                  className={cn(
+                    "flex aspect-square min-h-10 flex-col items-center justify-center rounded-lg border text-sm font-medium transition-all hover:scale-[1.03] hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    meta.cell,
+                    isToday && "border-cyan-400 ring-2 ring-cyan-400/70 ring-offset-2 ring-offset-background",
+                  )}
+                  aria-label={`Dia ${day}: ${meta.label}`}
+                >
+                  {day}
+                </button>
+              )
+            })}
+          </div>
+        </div>
       </div>
     </Card>
   )

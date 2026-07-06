@@ -14,7 +14,6 @@ import {
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import {
-  DEFAULT_SOUND_PREFERENCES,
   LONG_AUDIO_THRESHOLD_SECONDS,
   MAX_CUSTOM_SOUND_SIZE_BYTES,
   SOUND_EVENT_OPTIONS,
@@ -211,29 +210,35 @@ export function SoundSettingsCard({ settings, updateSettings }: SoundSettingsCar
   }
 
   return (
-    <div className="relative min-h-[520px] [perspective:1200px]">
+    <div className="relative h-[560px] [perspective:1200px] sm:h-[540px] lg:h-[520px]">
       <div
         className={cn(
-          "relative min-h-[520px] transition-transform duration-500 [transform-style:preserve-3d]",
+          "relative h-full transition-transform duration-500 [transform-style:preserve-3d]",
           isEditing && "[transform:rotateY(180deg)]",
         )}
       >
-        <Card className="absolute inset-0 [backface-visibility:hidden]">
+        <Card className="absolute inset-0 flex flex-col overflow-hidden [backface-visibility:hidden]">
           <CardHeader>
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <span className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
                   <Volume2 className="size-4" />
                 </span>
                 <CardTitle className="text-xl">Sons</CardTitle>
               </div>
-              <Button type="button" variant="outline" size="sm" onClick={() => setIsEditing(true)}>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="min-h-9"
+                onClick={() => setIsEditing(true)}
+              >
                 Editar
               </Button>
             </div>
             <CardDescription>Áudios usados nos momentos da rotina</CardDescription>
           </CardHeader>
-          <CardContent className="flex flex-col gap-3">
+          <CardContent className="flex flex-1 flex-col gap-3">
             {SOUND_EVENT_OPTIONS.map((option) => {
               const preference = getSoundPreference(settings.soundPreferences, option.key)
               const selectedSound = customSoundsById.get(preference.audioId)
@@ -242,13 +247,13 @@ export function SoundSettingsCard({ settings, updateSettings }: SoundSettingsCar
               return (
                 <div
                   key={option.key}
-                  className="flex items-center justify-between gap-3 rounded-xl border border-border bg-muted/30 p-4"
+                  className="flex items-start justify-between gap-3 rounded-xl border border-border bg-muted/30 p-4 sm:items-center"
                 >
-                  <div className="flex flex-col gap-1">
+                  <div className="flex min-w-0 flex-col gap-1">
                     <span className="text-base font-medium text-foreground">{option.label}</span>
-                    <span className="text-sm text-muted-foreground">{name}</span>
+                    <span className="wrap-break-word text-sm text-muted-foreground">{name}</span>
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex shrink-0 items-center gap-3">
                     <Switch
                       checked={getSoundEnabled(settings, option.key)}
                       onCheckedChange={(checked: boolean) =>
@@ -266,133 +271,158 @@ export function SoundSettingsCard({ settings, updateSettings }: SoundSettingsCar
           </CardContent>
         </Card>
 
-        <Card className="absolute inset-0 overflow-y-auto [backface-visibility:hidden] [transform:rotateY(180deg)]">
+        <Card className="absolute inset-0 flex flex-col overflow-hidden [backface-visibility:hidden] [transform:rotateY(180deg)]">
           <CardHeader>
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <span className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
                   <Volume2 className="size-4" />
                 </span>
                 <CardTitle className="text-xl">Editar sons</CardTitle>
               </div>
-              <Button type="button" variant="outline" size="sm" onClick={() => setIsEditing(false)}>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="min-h-9"
+                onClick={() => setIsEditing(false)}
+              >
                 Voltar
               </Button>
             </div>
             <CardDescription>Escolha áudios importados ou use o sino padrão</CardDescription>
           </CardHeader>
-          <CardContent className="flex flex-col gap-4 pb-6">
-            {SOUND_EVENT_OPTIONS.map((option) => {
-              const preference = getSoundPreference(settings.soundPreferences, option.key)
-              const selectedSound = customSoundsById.get(preference.audioId)
-              const isLongAudio = Boolean(
-                selectedSound && selectedSound.durationSeconds > LONG_AUDIO_THRESHOLD_SECONDS,
-              )
-              const maxEnd = selectedSound?.durationSeconds ?? 0
-              const endValue = preference.endSeconds ?? maxEnd
+          <CardContent className="min-h-0 flex-1 overflow-y-auto pb-6">
+            <div className="flex flex-col gap-4">
+              {SOUND_EVENT_OPTIONS.map((option) => {
+                const preference = getSoundPreference(settings.soundPreferences, option.key)
+                const selectedSound = customSoundsById.get(preference.audioId)
+                const isLongAudio = Boolean(
+                  selectedSound && selectedSound.durationSeconds > LONG_AUDIO_THRESHOLD_SECONDS,
+                )
+                const maxEnd = selectedSound?.durationSeconds ?? 0
+                const endValue = preference.endSeconds ?? maxEnd
 
-              return (
-                <div key={option.key} className="rounded-xl border border-border bg-muted/20 p-4">
-                  <div className="flex flex-col gap-3">
-                    <div className="flex flex-col gap-1">
-                      <Label className="text-base font-medium text-foreground">{option.label}</Label>
-                      <span className="text-sm text-muted-foreground">{option.description}</span>
-                    </div>
-
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                      <Select
-                        value={preference.audioId}
-                        onValueChange={(value) => handleSelectAudio(option.key, value ?? "default")}
-                      >
-                        <SelectTrigger className="w-full text-base sm:flex-1">
-                          <span>
-                            {preference.audioId === "default" ? "Padrão" : selectedSound?.name ?? "Padrão"}
-                          </span>
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="default">Padrão</SelectItem>
-                          {settings.customSounds.map((sound) => (
-                            <SelectItem key={sound.id} value={sound.id}>
-                              {sound.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-
-                      <Button type="button" variant="outline" onClick={() => handlePlay(option.key)}>
-                        Tocar
-                      </Button>
-                    </div>
-
-                    {isLongAudio && selectedSound ? (
-                      <div className="grid gap-3 rounded-lg bg-background/60 p-3 transition-all duration-300 sm:grid-cols-2">
-                        <div className="flex flex-col gap-1.5">
-                          <Label htmlFor={`${option.key}-start`} className="text-sm">
-                            Iniciar áudio em
-                          </Label>
-                          <Input
-                            id={`${option.key}-start`}
-                            type="number"
-                            min={0}
-                            max={Math.max(0, maxEnd - 1)}
-                            step={0.5}
-                            value={preference.startSeconds}
-                            onChange={(event) => {
-                              const startSeconds = Math.max(0, Number(event.target.value) || 0)
-                              updatePreference(option.key, {
-                                startSeconds,
-                                endSeconds: Math.max(startSeconds + 0.5, endValue),
-                              })
-                            }}
-                          />
-                        </div>
-                        <div className="flex flex-col gap-1.5">
-                          <Label htmlFor={`${option.key}-end`} className="text-sm">
-                            Finalizar áudio em
-                          </Label>
-                          <Input
-                            id={`${option.key}-end`}
-                            type="number"
-                            min={preference.startSeconds + 0.5}
-                            max={maxEnd}
-                            step={0.5}
-                            value={endValue}
-                            onChange={(event) => {
-                              const endSeconds = Math.min(
-                                maxEnd,
-                                Math.max(preference.startSeconds + 0.5, Number(event.target.value) || 0),
-                              )
-                              updatePreference(option.key, { endSeconds })
-                            }}
-                          />
-                          <span className="text-sm text-muted-foreground">
-                            Duração: {formatDuration(selectedSound.durationSeconds)}
-                          </span>
-                        </div>
+                return (
+                  <div key={option.key} className="rounded-xl border border-border bg-muted/20 p-4">
+                    <div className="flex flex-col gap-3">
+                      <div className="flex min-w-0 flex-col gap-1">
+                        <Label className="text-base font-medium text-foreground">{option.label}</Label>
+                        <span className="wrap-break-word text-sm text-muted-foreground">
+                          {option.description}
+                        </span>
                       </div>
-                    ) : null}
+
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                        <Select
+                          value={preference.audioId}
+                          onValueChange={(value) => handleSelectAudio(option.key, value ?? "default")}
+                        >
+                          <SelectTrigger className="min-h-10 w-full text-base sm:flex-1">
+                            <span className="wrap-break-word text-left">
+                              {preference.audioId === "default"
+                                ? "Padrão"
+                                : selectedSound?.name ?? "Padrão"}
+                            </span>
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="default">Padrão</SelectItem>
+                            {settings.customSounds.map((sound) => (
+                              <SelectItem key={sound.id} value={sound.id}>
+                                {sound.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="min-h-10 sm:w-auto"
+                          onClick={() => handlePlay(option.key)}
+                        >
+                          Tocar
+                        </Button>
+                      </div>
+
+                      {isLongAudio && selectedSound ? (
+                        <div className="grid gap-3 rounded-lg bg-background/60 p-3 transition-all duration-300 sm:grid-cols-2">
+                          <div className="flex flex-col gap-1.5">
+                            <Label htmlFor={`${option.key}-start`} className="text-sm">
+                              Iniciar áudio em
+                            </Label>
+                            <Input
+                              id={`${option.key}-start`}
+                              type="number"
+                              min={0}
+                              max={Math.max(0, maxEnd - 1)}
+                              step={0.5}
+                              value={preference.startSeconds}
+                              onChange={(event) => {
+                                const startSeconds = Math.max(0, Number(event.target.value) || 0)
+                                updatePreference(option.key, {
+                                  startSeconds,
+                                  endSeconds: Math.max(startSeconds + 0.5, endValue),
+                                })
+                              }}
+                            />
+                          </div>
+                          <div className="flex flex-col gap-1.5">
+                            <Label htmlFor={`${option.key}-end`} className="text-sm">
+                              Finalizar áudio em
+                            </Label>
+                            <Input
+                              id={`${option.key}-end`}
+                              type="number"
+                              min={preference.startSeconds + 0.5}
+                              max={maxEnd}
+                              step={0.5}
+                              value={endValue}
+                              onChange={(event) => {
+                                const endSeconds = Math.min(
+                                  maxEnd,
+                                  Math.max(
+                                    preference.startSeconds + 0.5,
+                                    Number(event.target.value) || 0,
+                                  ),
+                                )
+                                updatePreference(option.key, { endSeconds })
+                              }}
+                            />
+                            <span className="text-sm text-muted-foreground">
+                              Duração: {formatDuration(selectedSound.durationSeconds)}
+                            </span>
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
-                </div>
-              )
-            })}
+                )
+              })}
 
-            {message ? <p className="text-center text-sm text-muted-foreground">{message}</p> : null}
+              {message ? <p className="text-center text-sm text-muted-foreground">{message}</p> : null}
 
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="audio/*"
-              className="hidden"
-              onChange={handleImportAudio}
-            />
-            <div className="flex flex-col items-center gap-2 pt-2">
-              <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()}>
-                <Upload className="mr-2 size-4" />
-                Importar áudio
-              </Button>
-              <span className="text-sm text-muted-foreground">
-                Limite de {formatFileSize(MAX_CUSTOM_SOUND_SIZE_BYTES)} por arquivo.
-              </span>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="audio/*"
+                className="hidden"
+                onChange={handleImportAudio}
+              />
+              <div className="flex flex-col items-center gap-2 pt-2 text-center">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="min-h-10"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Upload className="mr-2 size-4" />
+                  Importar áudio
+                </Button>
+                <span className="text-sm text-muted-foreground">
+                  Limite de {formatFileSize(MAX_CUSTOM_SOUND_SIZE_BYTES)} por arquivo.
+                </span>
+              </div>
             </div>
           </CardContent>
         </Card>

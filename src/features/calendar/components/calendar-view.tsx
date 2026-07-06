@@ -44,11 +44,11 @@ export function CalendarioView() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex w-full max-w-full flex-col gap-5 overflow-x-hidden sm:gap-6">
       <PageHeading title="Calendário" align="center" />
 
-      <div className="grid items-stretch gap-6 lg:grid-cols-[360px_minmax(430px,1fr)_360px]">
-        <div className="order-2 h-full lg:order-1">
+      <div className="grid w-full max-w-full min-w-0 items-stretch gap-5 xl:grid-cols-[300px_minmax(0,1fr)_320px] xl:gap-6">
+        <div className="order-2 h-full xl:order-1">
           <Card className="p-0 lg:hidden">
             <Accordion>
               <AccordionItem value="legend" className="border-none">

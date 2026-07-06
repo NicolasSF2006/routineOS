@@ -32,7 +32,7 @@ export function AppearanceSettingsCard({ theme, setTheme }: AppearanceSettingsCa
       <CardContent>
         <SettingRow label="Tema" description="Alterne entre claro e escuro">
           <Select value={theme} onValueChange={(value) => setTheme(value as Theme)}>
-            <SelectTrigger className="w-36">
+            <SelectTrigger className="w-full min-w-36 sm:w-36">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -60,4 +60,3 @@ export function AppearanceSettingsCard({ theme, setTheme }: AppearanceSettingsCa
     </Card>
   )
 }
-

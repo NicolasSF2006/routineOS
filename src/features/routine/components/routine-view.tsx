@@ -58,16 +58,16 @@ export function RoutineView() {
     : currentBlockIndex
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex w-full max-w-full flex-col gap-5 overflow-x-hidden sm:gap-6">
       <PageHeading title={monthLabel} align="center" />
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_360px] lg:items-start">
+      <div className="grid w-full max-w-full min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start xl:grid-cols-[minmax(0,1fr)_360px]">
         <Tabs
           value={activeDateKey}
           onValueChange={(value) => setActiveDateKey(value)}
-          className="w-full"
+          className="w-full max-w-full min-w-0"
         >
-          <div className="flex items-center gap-2">
+          <div className="flex w-full max-w-full min-w-0 items-center gap-2">
             <Button
               type="button"
               variant="outline"
@@ -79,14 +79,14 @@ export function RoutineView() {
               <ChevronLeft className="size-4" />
             </Button>
 
-            <div className="min-w-0 flex-1 overflow-x-auto pb-1">
+            <div className="min-w-0 flex-1 overflow-x-auto overscroll-x-contain pb-1">
               <TabsList className="!h-auto min-w-max justify-start gap-1 p-1 sm:grid sm:w-full sm:grid-cols-7">
                 {currentWeekDays.map((day) => (
                   <TabsTrigger
                     key={day.dateKey}
                     value={day.dateKey}
                     className={cn(
-                      "!h-auto min-w-24 flex-col gap-0.5 px-3 py-2 text-sm sm:min-w-0 sm:text-sm",
+                      "!h-auto min-w-20 flex-col gap-0.5 px-3 py-2 text-sm sm:min-w-0 sm:text-sm",
                       day.isToday && "ring-1 ring-primary/35",
                     )}
                   >
@@ -116,8 +116,8 @@ export function RoutineView() {
             const hasBlocks = blocks.length > 0
 
             return (
-              <TabsContent key={day.dateKey} value={day.dateKey} className="mt-4">
-                <div className="flex flex-col gap-2">
+              <TabsContent key={day.dateKey} value={day.dateKey} className="mt-4 w-full max-w-full">
+                <div className="flex w-full max-w-full flex-col gap-2">
                   {hasBlocks ? (
                     blocks.map((block, index) => (
                       <RoutineBlockRow
@@ -141,7 +141,7 @@ export function RoutineView() {
           })}
         </Tabs>
 
-        <div className="lg:sticky lg:top-20">
+        <div className="w-full max-w-full min-w-0 lg:sticky lg:top-20">
           <StudyControl
             session={session}
             hasRoutine={hasRoutine}

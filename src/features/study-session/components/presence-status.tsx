@@ -8,8 +8,8 @@ interface PresenceStatusProps {
 export function PresenceStatus({ presenceTime, canceledTime }: PresenceStatusProps) {
   if (canceledTime) {
     return (
-      <div className="flex items-center gap-2 rounded-xl bg-status-falta/10 px-4 py-3 text-sm">
-        <XCircle className="size-4 text-status-falta" />
+      <div className="flex flex-wrap items-center gap-2 rounded-xl bg-status-falta/10 px-4 py-3 text-sm">
+        <XCircle className="size-4 shrink-0 text-status-falta" />
         <span className="text-muted-foreground">Dia de estudo cancelado às</span>
         <span className="font-semibold text-foreground">{canceledTime}</span>
       </div>
@@ -25,8 +25,8 @@ export function PresenceStatus({ presenceTime, canceledTime }: PresenceStatusPro
   }
 
   return (
-    <div className="flex items-center gap-2 rounded-xl bg-muted/60 px-4 py-3 text-sm">
-      <CheckCircle2 className="size-4 text-status-correto" />
+    <div className="flex flex-wrap items-center gap-2 rounded-xl bg-muted/60 px-4 py-3 text-sm">
+      <CheckCircle2 className="size-4 shrink-0 text-status-correto" />
       <span className="text-muted-foreground">Presença marcada às</span>
       <span className="font-semibold text-foreground">{presenceTime}</span>
     </div>

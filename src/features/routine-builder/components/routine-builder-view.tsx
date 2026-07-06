@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import type { DragEvent } from "react"
 import {
   ChevronLeft,
@@ -11,8 +11,8 @@ import {
   Plus,
   Save,
   Trash2,
+  X,
 } from "lucide-react"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -146,7 +146,7 @@ function createBlockFromEditing(editing: EditingState): RoutineBlock {
   }
 }
 
-export function RoutineBuilderView({ onBackToSettings, onNavigateToRoutine }: RoutineBuilderViewProps) {
+export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps) {
   const { routine, saveRoutine, isLoading } = useRoutine()
   const [selectedDateKey, setSelectedDateKey] = useState(() => getTodayDateKey())
   const [draftRoutine, setDraftRoutine] = useState<Routine | null>(null)
@@ -157,6 +157,9 @@ export function RoutineBuilderView({ onBackToSettings, onNavigateToRoutine }: Ro
   const [dragOverWeekday, setDragOverWeekday] = useState<Weekday | null>(null)
   const [dragOverBlockId, setDragOverBlockId] = useState<string | null>(null)
   const [draggingBlockId, setDraggingBlockId] = useState<string | null>(null)
+  const openMenuRef = useRef<HTMLDivElement | null>(null)
+  const workspaceScrollRef = useRef<HTMLDivElement | null>(null)
+  const selectedDayColumnRef = useRef<HTMLDivElement | null>(null)
 
   const selectedDate = parseDateKey(selectedDateKey)
   const selectedWeekday = getWeekdayFromDateKey(selectedDateKey)
@@ -181,6 +184,44 @@ export function RoutineBuilderView({ onBackToSettings, onNavigateToRoutine }: Ro
     setDraggingBlockId(null)
     setIsSaved(false)
   }, [draftRoutine, selectedDateKey])
+
+  useEffect(() => {
+    if (!openMenuBlockId) return
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target
+
+      if (target instanceof Node && openMenuRef.current?.contains(target)) {
+        return
+      }
+
+      setOpenMenuBlockId(null)
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown)
+    return () => document.removeEventListener("pointerdown", handlePointerDown)
+  }, [openMenuBlockId])
+
+  useEffect(() => {
+    const workspace = workspaceScrollRef.current
+    const selectedColumn = selectedDayColumnRef.current
+
+    if (!workspace || !selectedColumn || workspace.scrollWidth <= workspace.clientWidth) {
+      return
+    }
+
+    window.requestAnimationFrame(() => {
+      const workspaceRect = workspace.getBoundingClientRect()
+      const selectedRect = selectedColumn.getBoundingClientRect()
+      const centeredLeft =
+        workspace.scrollLeft +
+        selectedRect.left -
+        workspaceRect.left -
+        Math.max(0, (workspace.clientWidth - selectedRect.width) / 2)
+
+      workspace.scrollTo({ left: Math.max(0, centeredLeft), behavior: "auto" })
+    })
+  }, [selectedDateKey, draftWeek])
 
   const selectedDay = draftWeek ? getRoutineWeekDay(draftWeek, selectedWeekday) : null
 
@@ -409,6 +450,34 @@ export function RoutineBuilderView({ onBackToSettings, onNavigateToRoutine }: Ro
     event.dataTransfer.setData("text/plain", JSON.stringify(payload))
   }
 
+  const handlePaletteClick = (type: RoutineBlockType) => {
+    openCreateDialog(type)
+  }
+
+  const renderBlockPalette = () => (
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+      {BUILDER_BLOCK_OPTIONS.map((option) => (
+        <button
+          key={option.type}
+          type="button"
+          draggable
+          onDragStart={(event) => handlePaletteDragStart(event, option.type)}
+          onDragEnd={clearDragState}
+          onClick={() => handlePaletteClick(option.type)}
+          className={cn(
+            "min-h-20 cursor-grab rounded-xl border p-4 text-left shadow-sm transition-transform hover:-translate-y-0.5 hover:shadow-md active:cursor-grabbing xl:rounded-2xl",
+            option.className,
+          )}
+        >
+          <span className="block text-base font-semibold text-foreground">{option.label}</span>
+          <span className="mt-2 block text-sm text-muted-foreground">
+            {option.defaultDurationMinutes}min
+          </span>
+        </button>
+      ))}
+    </div>
+  )
+
   const handleBlockDragStart = (event: DragEvent<HTMLDivElement>, block: RoutineBlock, weekday: Weekday) => {
     const payload: DragPayload = { kind: "block", sourceWeekday: weekday, blockId: block.id }
 
@@ -512,33 +581,33 @@ export function RoutineBuilderView({ onBackToSettings, onNavigateToRoutine }: Ro
 
   if (isLoading || !draftWeek || !selectedDay) {
     return (
-      <div className="flex flex-col gap-6">
-        <div className="relative">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="absolute left-0 top-1/2 -translate-y-1/2 rounded-full"
-          onClick={onBackToSettings}
-          aria-label="Voltar"
-        >
-          <ChevronLeft className="size-5" />
-        </Button>
+      <div className="flex flex-col gap-5 sm:gap-6">
+        <div className="relative flex w-full items-center justify-center">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-lg"
+            className="absolute left-0 rounded-full"
+            onClick={onBackToSettings}
+            aria-label="Voltar"
+          >
+            <ChevronLeft className="size-5" />
+          </Button>
 
-        <PageHeading title="Configurar rotina" align="center" />
-      </div>
+          <PageHeading title="Configurar rotina" align="center" />
+        </div>
         <div className="p-6 text-center text-base text-muted-foreground">Carregando rotina...</div>
       </div>
     )
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-5 sm:gap-6">
       <div className="relative flex w-full items-center justify-center">
         <Button
           type="button"
           variant="ghost"
-          size="icon"
+          size="icon-lg"
           className="absolute left-0 rounded-full"
           onClick={onBackToSettings}
           aria-label="Voltar para configurações"
@@ -551,18 +620,17 @@ export function RoutineBuilderView({ onBackToSettings, onNavigateToRoutine }: Ro
 
       <div className="grid gap-6">
         <section className="min-w-0">
-
-          <div className="mb-6 flex flex-col items-center gap-3">
-            <h2 className="text-2xl font-semibold text-foreground">{selectedMonthLabel}</h2>
+          <div className="mb-5 flex flex-col items-center gap-3 sm:mb-6">
+            <h2 className="text-xl font-semibold text-foreground sm:text-2xl">{selectedMonthLabel}</h2>
           </div>
 
-          <div className="overflow-x-auto pb-4">
-            <div className="grid min-w-[1320px] grid-cols-[56px_repeat(7,minmax(0,1fr))_56px] gap-4 sm:min-w-0">
+          <div ref={workspaceScrollRef} className="overflow-x-auto overscroll-x-contain pb-4">
+            <div className="routine-builder-workspace-grid grid">
               <div className="flex items-start justify-center pt-3">
                 <Button
                   type="button"
                   variant="outline"
-                  size="icon"
+                  size="icon-lg"
                   className="shrink-0 rounded-full"
                   onClick={() => moveWeek(-1)}
                   aria-label="Semana anterior"
@@ -574,16 +642,20 @@ export function RoutineBuilderView({ onBackToSettings, onNavigateToRoutine }: Ro
               {weekDays.map((day, index) => {
                 const routineDay = draftWeek ? getRoutineWeekDay(draftWeek, day.key) : null
                 const blocks = routineDay?.blocks ?? []
-                
+
                 return (
-                  <div key={day.dateKey} className="flex min-w-0 flex-col gap-3">
+                  <div
+                    key={day.dateKey}
+                    ref={day.key === selectedWeekday ? selectedDayColumnRef : undefined}
+                    className="flex min-w-0 flex-col gap-3"
+                  >
                     <button
                       type="button"
-                        className={cn(
-                          "rounded-xl px-2 pb-1 text-center transition-colors",
-                          "text-muted-foreground",
-                          day.isToday && "border border-cyan-400/70 bg-cyan-500/5 text-foreground",
-                        )}
+                      className={cn(
+                        "min-h-14 rounded-xl px-2 py-2 text-center transition-colors",
+                        "text-muted-foreground",
+                        day.isToday && "border border-cyan-400/70 bg-cyan-500/5 text-foreground",
+                      )}
                     >
                       <span className="block text-center text-lg font-semibold leading-tight">{day.label}</span>
                       <span className="mt-1 block font-mono text-lg font-semibold leading-none tabular-nums">
@@ -593,8 +665,8 @@ export function RoutineBuilderView({ onBackToSettings, onNavigateToRoutine }: Ro
 
                     <div
                       className={cn(
-                        "flex min-h-[640px] flex-col gap-4 rounded-2xl transition-colors",
-                        index === 0 ? "pr-2" : "border-l border-border/30 pl-4 pr-2",
+                        "flex min-h-[480px] flex-col gap-3 rounded-xl transition-colors md:min-h-[560px] xl:min-h-[640px] xl:gap-4 xl:rounded-2xl",
+                        index === 0 ? "pr-2" : "border-l border-border/30 pl-3 pr-2 xl:pl-4",
                         dragOverWeekday === day.key && "bg-primary/[0.04] ring-1 ring-primary/30",
                       )}
                       onDragOver={(event) => handleDayDragOver(event, day.key)}
@@ -606,7 +678,7 @@ export function RoutineBuilderView({ onBackToSettings, onNavigateToRoutine }: Ro
                         onClick={() => openCreateDialog("study", day.key)}
                         onDragOver={(event) => handleDayDragOver(event, day.key)}
                         onDrop={(event) => handleDrop(event, day.key)}
-                        className="order-last flex min-h-[76px] w-full items-center justify-center rounded-2xl border border-dashed border-border/70 bg-muted/10 text-base font-medium text-muted-foreground transition-colors hover:border-primary/70 hover:bg-primary/5 hover:text-primary"
+                        className="order-last flex min-h-[68px] w-full items-center justify-center rounded-xl border border-dashed border-border/70 bg-muted/10 text-base font-medium text-muted-foreground transition-colors hover:border-primary/70 hover:bg-primary/5 hover:text-primary xl:min-h-[76px] xl:rounded-2xl"
                         aria-label={`Adicionar bloco em ${day.label}`}
                       >
                         <Plus className="size-5" />
@@ -624,8 +696,9 @@ export function RoutineBuilderView({ onBackToSettings, onNavigateToRoutine }: Ro
                             onDragOver={(event) => handleBlockDragOver(event, day.key, block.id)}
                             onDrop={(event) => handleDrop(event, day.key, block.id)}
                             onDragEnd={clearDragState}
+                            ref={menuOpen ? openMenuRef : undefined}
                             className={cn(
-                              "relative min-h-[112px] cursor-grab rounded-2xl border p-4 text-left shadow-sm transition-colors active:cursor-grabbing",
+                              "relative min-h-[96px] cursor-grab rounded-xl border p-3 text-left shadow-sm transition-colors active:cursor-grabbing md:min-h-[104px] xl:min-h-[112px] xl:rounded-2xl xl:p-4",
                               option.className,
                               draggingBlockId === block.id && "opacity-50",
                               dragOverBlockId === block.id && "ring-2 ring-primary/60",
@@ -633,7 +706,7 @@ export function RoutineBuilderView({ onBackToSettings, onNavigateToRoutine }: Ro
                           >
                             <div className="flex items-start justify-between gap-2">
                               <div className="min-w-0 flex-1">
-                                <span className="block truncate text-base font-semibold text-foreground">
+                                <span className="wrap-break-word block whitespace-normal text-base font-semibold text-foreground">
                                   {block.title}
                                 </span>
                                 <span className="mt-2 block text-sm text-muted-foreground">
@@ -644,8 +717,8 @@ export function RoutineBuilderView({ onBackToSettings, onNavigateToRoutine }: Ro
                               <Button
                                 type="button"
                                 variant="ghost"
-                                size="icon-sm"
-                                className="shrink-0"
+                                size="icon"
+                                className="shrink-0 rounded-full"
                                 onClick={() => setOpenMenuBlockId(menuOpen ? null : block.id)}
                                 aria-label="Abrir ações do bloco"
                               >
@@ -654,11 +727,11 @@ export function RoutineBuilderView({ onBackToSettings, onNavigateToRoutine }: Ro
                             </div>
 
                             {menuOpen ? (
-                              <div className="absolute left-full top-2 z-50 ml-3 grid min-w-[180px] gap-1 rounded-xl border border-border/80 bg-background p-2 shadow-2xl">
+                              <div className="absolute right-2 top-12 z-50 grid w-44 max-w-[calc(100vw-2rem)] gap-1 rounded-xl border border-border/80 bg-background p-2 shadow-2xl md:left-[calc(100%+0.5rem)] md:right-auto md:top-2">
                                 <Button
                                   type="button"
                                   variant="ghost"
-                                  className="justify-start"
+                                  className="min-h-9 justify-start"
                                   onClick={() => openEditDialog(block, day.key)}
                                 >
                                   <Pencil className="mr-2 size-4" />
@@ -667,7 +740,7 @@ export function RoutineBuilderView({ onBackToSettings, onNavigateToRoutine }: Ro
                                 <Button
                                   type="button"
                                   variant="ghost"
-                                  className="justify-start"
+                                  className="min-h-9 justify-start"
                                   onClick={() => duplicateBlock(block, day.key)}
                                 >
                                   <Copy className="mr-2 size-4" />
@@ -676,7 +749,7 @@ export function RoutineBuilderView({ onBackToSettings, onNavigateToRoutine }: Ro
                                 <Button
                                   type="button"
                                   variant="ghost"
-                                  className="justify-start"
+                                  className="min-h-9 justify-start"
                                   disabled={blockIndex === 0}
                                   onClick={() => moveBlock(block.id, -1, day.key)}
                                 >
@@ -685,7 +758,7 @@ export function RoutineBuilderView({ onBackToSettings, onNavigateToRoutine }: Ro
                                 <Button
                                   type="button"
                                   variant="ghost"
-                                  className="justify-start"
+                                  className="min-h-9 justify-start"
                                   disabled={blockIndex === blocks.length - 1}
                                   onClick={() => moveBlock(block.id, 1, day.key)}
                                 >
@@ -694,7 +767,7 @@ export function RoutineBuilderView({ onBackToSettings, onNavigateToRoutine }: Ro
                                 <Button
                                   type="button"
                                   variant="ghost"
-                                  className="justify-start text-destructive hover:text-destructive"
+                                  className="min-h-9 justify-start text-destructive hover:text-destructive"
                                   onClick={() => deleteBlock(block.id, day.key)}
                                 >
                                   <Trash2 className="mr-2 size-4" />
@@ -714,7 +787,7 @@ export function RoutineBuilderView({ onBackToSettings, onNavigateToRoutine }: Ro
                 <Button
                   type="button"
                   variant="outline"
-                  size="icon"
+                  size="icon-lg"
                   className="shrink-0 rounded-full"
                   onClick={() => moveWeek(1)}
                   aria-label="Próxima semana"
@@ -725,57 +798,48 @@ export function RoutineBuilderView({ onBackToSettings, onNavigateToRoutine }: Ro
             </div>
           </div>
 
-          <div className="mt-6 flex items-center justify-between border-t border-border/50 pt-5">
-            <Button type="button" variant="outline" onClick={clearCurrentMonthRoutine}>
+          <div className="mt-5 flex flex-col gap-3 border-t border-border/50 pt-5 sm:mt-6 sm:flex-row sm:items-center sm:justify-between">
+            <Button
+              type="button"
+              variant="outline"
+              className="min-h-11 w-full sm:w-auto"
+              onClick={clearCurrentMonthRoutine}
+            >
               Limpar
             </Button>
 
-            <Button type="button" onClick={saveCurrentMonthRoutine}>
+            <Button
+              type="button"
+              className="min-h-11 w-full sm:w-auto"
+              onClick={saveCurrentMonthRoutine}
+            >
               <Save className="mr-2 size-4" />
               Salvar
             </Button>
           </div>
         </section>
 
-        <aside className="group fixed right-0 top-24 z-40 hidden h-[calc(100vh-7rem)] w-[320px] translate-x-[calc(100%-12px)] transition-transform duration-300 hover:translate-x-0 xl:block">
+        <aside
+          className="routine-builder-block-panel group fixed right-0 top-24 z-40 h-[calc(100vh-7rem)] w-[320px] translate-x-[calc(100%-12px)] transition-transform duration-300 hover:translate-x-0"
+          aria-label="Painel de blocos"
+        >
           <div className="h-full rounded-l-2xl border border-r-0 border-border/70 bg-background/95 p-4 shadow-2xl backdrop-blur">
-
             <h2 className="mb-4 text-xl font-semibold text-foreground">Blocos</h2>
 
-            <div className="grid gap-3">
-              {BUILDER_BLOCK_OPTIONS.map((option) => (
-                <button
-                  key={option.type}
-                  type="button"
-                  draggable
-                  onDragStart={(event) => handlePaletteDragStart(event, option.type)}
-                  onDragEnd={clearDragState}
-                  onClick={() => openCreateDialog(option.type)}
-                  className={cn(
-                    "cursor-grab rounded-2xl border p-4 text-left shadow-sm transition-transform hover:-translate-y-0.5 hover:shadow-md active:cursor-grabbing",
-                    option.className,
-                  )}
-                >
-                  <span className="block text-base font-semibold text-foreground">{option.label}</span>
-                  <span className="mt-2 block text-sm text-muted-foreground">
-                    {option.defaultDurationMinutes}min
-                  </span>
-                </button>
-              ))}
-            </div>
+            {renderBlockPalette()}
           </div>
         </aside>
       </div>
 
       {editing ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/35 p-3 backdrop-blur-sm sm:items-center sm:p-4">
           <div
-            className="w-full max-w-3xl overflow-hidden rounded-2xl border border-border bg-background shadow-2xl"
+            className="flex max-h-[calc(100svh-1.5rem)] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-2xl"
             role="dialog"
             aria-modal="true"
             aria-labelledby="routine-block-modal-title"
           >
-            <div className="flex items-center justify-between border-b border-border px-6 py-5">
+            <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-4 sm:px-6 sm:py-5">
               <h2 id="routine-block-modal-title" className="text-xl font-semibold text-foreground">
                 {editing.mode === "edit" ? "Editar bloco" : "Adicionar bloco"}
               </h2>
@@ -783,14 +847,14 @@ export function RoutineBuilderView({ onBackToSettings, onNavigateToRoutine }: Ro
               <button
                 type="button"
                 onClick={closeEditing}
-                className="flex size-9 items-center justify-center rounded-full text-xl text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                className="flex size-10 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 aria-label="Fechar modal"
               >
-                ×
+                <X className="size-5" />
               </button>
             </div>
 
-            <div className="grid gap-6 px-6 py-6">
+            <div className="grid gap-5 overflow-y-auto px-4 py-4 sm:gap-6 sm:px-6 sm:py-6">
               <div className="grid gap-3">
                 <Label>Tipo do bloco</Label>
 
@@ -801,7 +865,7 @@ export function RoutineBuilderView({ onBackToSettings, onNavigateToRoutine }: Ro
                       type="button"
                       onClick={() => handleSelectEditingType(option.type)}
                       className={cn(
-                        "rounded-2xl border px-5 py-4 text-left text-base transition-colors hover:brightness-110",
+                        "min-h-20 rounded-xl border px-4 py-4 text-left text-base transition-colors hover:brightness-110 sm:px-5 xl:rounded-2xl",
                         option.className,
                         editing.type === option.type && "ring-2 ring-primary/70",
                       )}
@@ -821,7 +885,7 @@ export function RoutineBuilderView({ onBackToSettings, onNavigateToRoutine }: Ro
                 <Label htmlFor="routine-block-title">Nome</Label>
                 <Input
                   id="routine-block-title"
-                  className="h-14 text-base"
+                  className="h-12 text-base sm:h-14"
                   value={editing.title}
                   onChange={(event) =>
                     setEditing((current) =>
@@ -836,7 +900,7 @@ export function RoutineBuilderView({ onBackToSettings, onNavigateToRoutine }: Ro
                 <Label htmlFor="routine-block-duration">Duração em minutos</Label>
                 <Input
                   id="routine-block-duration"
-                  className="h-14 text-base"
+                  className="h-12 text-base sm:h-14"
                   type="number"
                   min={1}
                   value={editing.durationMinutes}
@@ -854,11 +918,20 @@ export function RoutineBuilderView({ onBackToSettings, onNavigateToRoutine }: Ro
               </div>
             </div>
 
-            <div className="flex justify-end gap-3 border-t border-border bg-muted/20 px-6 py-4">
-              <Button type="button" variant="outline" onClick={closeEditing}>
+            <div className="flex flex-col-reverse gap-3 border-t border-border bg-muted/20 px-4 py-4 sm:flex-row sm:justify-end sm:px-6">
+              <Button
+                type="button"
+                variant="outline"
+                className="min-h-11 w-full sm:w-auto"
+                onClick={closeEditing}
+              >
                 Cancelar
               </Button>
-              <Button type="button" onClick={handleSaveBlock}>
+              <Button
+                type="button"
+                className="min-h-11 w-full sm:w-auto"
+                onClick={handleSaveBlock}
+              >
                 Salvar bloco
               </Button>
             </div>

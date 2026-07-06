@@ -36,14 +36,14 @@ export function RoutineModeSettingsCard({
               onClick={() => !option.soon && updateSettings({ routineMode: option.value })}
               disabled={option.soon}
               className={cn(
-                "flex items-center justify-between gap-3 rounded-xl border p-3 text-left transition-colors",
+                "flex items-start justify-between gap-3 rounded-xl border p-3 text-left transition-colors sm:items-center",
                 active ? "border-primary bg-primary/5" : "border-border hover:bg-muted",
                 option.soon && "cursor-not-allowed opacity-70 hover:bg-transparent",
               )}
             >
-              <div className="flex flex-col">
+              <div className="flex min-w-0 flex-col">
                 <span className="text-sm font-medium text-foreground">{option.label}</span>
-                <span className="text-sm text-muted-foreground">{option.desc}</span>
+                <span className="wrap-break-word text-sm text-muted-foreground">{option.desc}</span>
               </div>
               {option.soon ? (
                 <Badge variant="secondary" className="shrink-0">
@@ -66,4 +66,3 @@ export function RoutineModeSettingsCard({
     </Card>
   )
 }
-

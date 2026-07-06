@@ -23,12 +23,12 @@ function DetailRow({
   value: string
 }) {
   return (
-    <div className="flex items-center justify-between rounded-lg bg-muted/50 px-3 py-2.5">
+    <div className="flex flex-col gap-1 rounded-lg bg-muted/50 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
       <span className="flex items-center gap-2 text-sm text-muted-foreground">
-        <Icon className="size-4" />
+        <Icon className="size-4 shrink-0" />
         {label}
       </span>
-      <span className="text-sm font-medium text-foreground">{value}</span>
+      <span className="wrap-break-word text-sm font-medium text-foreground">{value}</span>
     </div>
   )
 }
@@ -65,19 +65,19 @@ export function DayDetailDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="max-h-[calc(100svh-2rem)] overflow-y-auto sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+          <DialogTitle className="flex items-center gap-2 pr-8">
             {day} de {monthName}
           </DialogTitle>
         </DialogHeader>
 
         <div className="flex flex-col gap-4">
-          <div className={cn("flex items-center gap-3 rounded-xl border px-4 py-3", meta.cell)}>
-            <span className={cn("size-3 rounded-full", meta.swatch)} />
-            <div className="flex flex-col">
+          <div className={cn("flex items-start gap-3 rounded-xl border px-4 py-3", meta.cell)}>
+            <span className={cn("mt-1 size-3 shrink-0 rounded-full", meta.swatch)} />
+            <div className="flex min-w-0 flex-col">
               <span className="text-sm font-semibold">{meta.label}</span>
-              <span className="text-sm opacity-90">{detail.statusReason}</span>
+              <span className="wrap-break-word text-sm opacity-90">{detail.statusReason}</span>
             </div>
           </div>
 
@@ -110,7 +110,7 @@ export function DayDetailDialog({
                 {detail.pauseList.map((pause, index) => (
                   <div
                     key={`${pause.start}-${index}`}
-                    className="flex items-center justify-between rounded-lg border border-border/70 px-3 py-2 text-sm"
+                    className="flex flex-col gap-1 rounded-lg border border-border/70 px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between"
                   >
                     <span className="text-muted-foreground">
                       {pause.start} → {pause.end}

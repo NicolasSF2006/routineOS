@@ -40,8 +40,8 @@ export function RoutineSettingsCard({
           </div>
 
           <Select value={hasCustomRoutine ? routine.id : "none"} disabled={!hasCustomRoutine}>
-            <SelectTrigger className="w-full justify-between text-base">
-              <span>
+            <SelectTrigger className="min-h-10 w-full justify-between text-base">
+              <span className="wrap-break-word text-left">
                 {hasCustomRoutine ? routine.name : "Nenhuma rotina personalizada criada"}
               </span>
             </SelectTrigger>
@@ -55,7 +55,7 @@ export function RoutineSettingsCard({
           </Select>
         </div>
 
-        <Button type="button" variant="outline" className="mt-3 justify-center" onClick={onConfigureRoutine}>
+        <Button type="button" variant="outline" className="mt-2 min-h-11 justify-center" onClick={onConfigureRoutine}>
           Configurar rotina
         </Button>
       </CardContent>

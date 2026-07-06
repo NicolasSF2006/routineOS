@@ -28,10 +28,10 @@ export function SettingsView({ onNavigate }: SettingsViewProps) {
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-5 sm:gap-6">
       <PageHeading title="Configurações" align="center" />
 
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid min-w-0 gap-5 md:grid-cols-2 xl:gap-6">
         <SoundSettingsCard settings={settings} updateSettings={updateSettings} />
         <RoutineSettingsCard
           routine={routine}

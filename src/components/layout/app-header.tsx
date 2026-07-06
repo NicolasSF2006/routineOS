@@ -31,30 +31,30 @@ export function AppHeader({
 
   return (
     <header className="sticky top-0 z-40 border-b border-border/80 bg-background/85 backdrop-blur-md">
-      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
-        <div className="flex w-20 items-center gap-2">
+      <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:h-16 sm:px-6">
+        <div className="flex w-16 items-center gap-2 sm:w-20">
           <div className="flex size-9 items-center justify-center rounded-xl bg-primary text-primary-foreground">
             <GraduationCap className="size-5" aria-hidden="true" />
           </div>
         </div>
 
-        <div className="flex min-w-0 flex-col items-center">
-          <h1 className="text-xl font-semibold leading-tight text-foreground">
+        <div className="flex min-w-0 flex-1 flex-col items-center px-3">
+          <h1 className="truncate text-xl font-semibold leading-tight text-foreground">
             RoutineOS
           </h1>
         </div>
 
-        <div className="flex w-20 items-center justify-end gap-1">
+        <div className="flex w-16 items-center justify-end gap-1 sm:w-20">
 
           <Sheet open={open} onOpenChange={setOpen}>
             <SheetTrigger
               render={
-                <Button variant="ghost" size="icon" aria-label="Abrir menu" className="rounded-xl" />
+                <Button variant="ghost" size="icon-lg" aria-label="Abrir menu" className="rounded-xl" />
               }
             >
               <Menu className="size-5" />
             </SheetTrigger>
-            <SheetContent side="right" className="w-72 p-0">
+            <SheetContent side="right" className="w-[min(20rem,calc(100vw-1rem))] p-0">
               <SheetHeader className="border-b border-border px-5 py-4 text-left">
                 <SheetTitle>Menu</SheetTitle>
                 <SheetDescription>Navegue entre as telas</SheetDescription>
@@ -84,9 +84,9 @@ export function AppHeader({
                       >
                         <Icon className="size-5" />
                       </span>
-                      <span className="flex flex-col">
+                      <span className="flex min-w-0 flex-col">
                         <span className="text-sm font-medium">{item.label}</span>
-                        <span className="text-sm text-muted-foreground">{item.description}</span>
+                        <span className="wrap-break-word text-sm text-muted-foreground">{item.description}</span>
                       </span>
                     </button>
                   )
