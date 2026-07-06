@@ -9,7 +9,7 @@ import { StudyControl } from "@/features/study-session/components/study-control"
 import { useStudySession } from "@/features/study-session/hooks/use-study-session"
 import { RoutineBlockRow } from "@/features/routine/components/routine-block-row"
 import { useRoutineSchedule } from "@/features/routine/hooks/use-routine-schedule"
-import { getRoutineDayBlocks } from "@/features/routine/utils/routine-domain"
+import { getRoutineDayBlocksForDateKey } from "@/features/routine/utils/routine-domain"
 import { cn } from "@/lib/utils"
 import { getMonthLabel, getTodayDateKey } from "@/utils/date"
 
@@ -112,7 +112,7 @@ export function RoutineView() {
           </div>
 
           {currentWeekDays.map((day) => {
-            const blocks = getRoutineDayBlocks(routine, day.weekday)
+            const blocks = getRoutineDayBlocksForDateKey(routine, day.dateKey)
             const hasBlocks = blocks.length > 0
 
             return (

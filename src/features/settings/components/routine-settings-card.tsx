@@ -1,7 +1,6 @@
 "use client"
 
 import { CalendarClock } from "lucide-react"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import {
@@ -15,9 +14,14 @@ import type { Routine } from "@/types/study"
 interface RoutineSettingsCardProps {
   routine: Routine
   hasCustomRoutine: boolean
+  onConfigureRoutine: () => void
 }
 
-export function RoutineSettingsCard({ routine, hasCustomRoutine }: RoutineSettingsCardProps) {
+export function RoutineSettingsCard({
+  routine,
+  hasCustomRoutine,
+  onConfigureRoutine,
+}: RoutineSettingsCardProps) {
   return (
     <Card>
       <CardHeader>
@@ -51,11 +55,8 @@ export function RoutineSettingsCard({ routine, hasCustomRoutine }: RoutineSettin
           </Select>
         </div>
 
-        <Button type="button" variant="outline" className="mt-3 justify-center" disabled>
+        <Button type="button" variant="outline" className="mt-3 justify-center" onClick={onConfigureRoutine}>
           Configurar rotina
-          <Badge variant="secondary" className="ml-2">
-            Em breve
-          </Badge>
         </Button>
       </CardContent>
     </Card>

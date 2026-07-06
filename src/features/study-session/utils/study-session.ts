@@ -1,7 +1,6 @@
 import { DEFAULT_ROUTINE } from "@/constants/routine"
 import {
-  getOfficialStartTime as getRoutineOfficialStartTime,
-  getWeekdayFromDateKey,
+  getOfficialStartTimeForDateKey as getRoutineOfficialStartTimeForDateKey,
   hasRoutineForDateKey,
 } from "@/features/routine/utils/routine-domain"
 import {
@@ -36,7 +35,7 @@ export function getOfficialStartTime(
   dateKey: string = getTodayDateKey(),
   routine: Routine = DEFAULT_ROUTINE,
 ): string | null {
-  return getRoutineOfficialStartTime(routine, getWeekdayFromDateKey(dateKey))
+  return getRoutineOfficialStartTimeForDateKey(routine, dateKey)
 }
 
 export function createEmptyRecord(dateKey: string): DailyStudyRecord {
@@ -67,7 +66,7 @@ export function getOpenPause(record: DailyStudyRecord): StudyPause | null {
 }
 
 export function isActiveStudyBlock(type: RoutineBlockType): boolean {
-  return type === "study" || type === "project"
+  return type === "study" || type === "project" || type === "other"
 }
 
 export function isRoutineBreakBlock(type: RoutineBlockType): boolean {

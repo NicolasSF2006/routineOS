@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## v1.3.0
+
+- Adicionada tela inicial de configuração visual da rotina.
+- Adicionada montagem semanal por clique com blocos de tarefa, pausas, almoço, projeto e outro.
+- Adicionadas ações de editar, duplicar, excluir e reordenar blocos.
+- Adicionados salvamento da semana e repetição da semana para o mês todo.
+- A rotina personalizada semanal passa a alimentar a tela inicial e o calendário.
+
 ## v1.2.2
 
 - Configurações atualizadas com título centralizado e sem descrição.

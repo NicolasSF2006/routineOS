@@ -8,6 +8,7 @@ import type {
   RoutineBlockType,
   RoutineDay,
   RoutineMode,
+  RoutineWeek,
   Weekday,
   StudyPause,
   StudySettings,
@@ -27,7 +28,7 @@ const ROUTINE_MODE_COMPAT: Record<string, RoutineMode> = {
 }
 
 const STUDY_SESSION_STATUSES: StudySessionStatus[] = ["in-progress", "completed", "canceled"]
-const ROUTINE_BLOCK_TYPES: RoutineBlockType[] = ["study", "short-break", "long-break", "lunch", "project"]
+const ROUTINE_BLOCK_TYPES: RoutineBlockType[] = ["study", "short-break", "long-break", "lunch", "project", "other"]
 const WEEKDAYS: Weekday[] = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
 
 function readJson<T>(key: string, fallback: T): T {
@@ -121,6 +122,24 @@ function normalizeRoutineDay(raw: unknown, index: number): RoutineDay | null {
   }
 }
 
+function normalizeRoutineWeek(raw: unknown, index: number): RoutineWeek | null {
+  if (!isObject(raw)) return null
+  if (typeof raw.weekStartDate !== "string") return null
+  if (!Array.isArray(raw.days)) return null
+
+  const days = raw.days
+    .map((day, dayIndex) => normalizeRoutineDay(day, dayIndex))
+    .filter((day): day is RoutineDay => day !== null)
+
+  if (days.length === 0) return null
+
+  return {
+    id: normalizeString(raw.id, `custom-week-${index + 1}`),
+    weekStartDate: raw.weekStartDate,
+    days,
+  }
+}
+
 function normalizeRoutine(raw: unknown): Routine | null {
   if (!isObject(raw)) return null
   if (!Array.isArray(raw.days)) return null
@@ -131,11 +150,18 @@ function normalizeRoutine(raw: unknown): Routine | null {
 
   if (days.length === 0) return null
 
+  const weeks = Array.isArray(raw.weeks)
+    ? raw.weeks
+        .map((week, index) => normalizeRoutineWeek(week, index))
+        .filter((week): week is RoutineWeek => week !== null)
+    : []
+
   return {
     id: normalizeString(raw.id, "custom-routine"),
     name: normalizeString(raw.name, "Rotina personalizada"),
     mode: normalizeRoutineMode(raw.mode),
     days,
+    weeks,
     createdAt: normalizeString(raw.createdAt, new Date(0).toISOString()),
     updatedAt: normalizeString(raw.updatedAt, new Date(0).toISOString()),
   }

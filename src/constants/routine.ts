@@ -87,6 +87,11 @@ export const BLOCK_TYPE_META: Record<RoutineBlockType, BlockTypeMeta> = {
     dot: "bg-chart-5",
     badge: "bg-chart-5/15 text-chart-5 border-chart-5/25",
   },
+  other: {
+    label: "Outro",
+    dot: "bg-muted-foreground",
+    badge: "bg-muted text-muted-foreground border-border",
+  },
 }
 
 const DEFAULT_ROUTINE_BLOCK_TEMPLATES: Omit<RoutineBlock, "id">[] = [

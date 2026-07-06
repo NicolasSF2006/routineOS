@@ -8,8 +8,13 @@ import { RoutineSettingsCard } from "@/features/settings/components/routine-sett
 import { SoundSettingsCard } from "@/features/settings/components/sound-settings-card"
 import { useStudySettings } from "@/hooks/use-study-settings"
 import { useRoutine } from "@/features/routine/hooks/use-routine"
+import type { ViewKey } from "@/types/navigation"
 
-export function SettingsView() {
+interface SettingsViewProps {
+  onNavigate: (view: ViewKey) => void
+}
+
+export function SettingsView({ onNavigate }: SettingsViewProps) {
   const { theme, setTheme } = useTheme()
   const { settings, updateSettings, hydrated } = useStudySettings()
   const { routine, hasCustomRoutine, isLoading: routineLoading } = useRoutine()
@@ -28,7 +33,11 @@ export function SettingsView() {
 
       <div className="grid gap-6 md:grid-cols-2">
         <SoundSettingsCard settings={settings} updateSettings={updateSettings} />
-        <RoutineSettingsCard routine={routine} hasCustomRoutine={hasCustomRoutine} />
+        <RoutineSettingsCard
+          routine={routine}
+          hasCustomRoutine={hasCustomRoutine}
+          onConfigureRoutine={() => onNavigate("configurar-rotina")}
+        />
         <GoalsSettingsCard settings={settings} updateSettings={updateSettings} />
         <AppearanceSettingsCard theme={theme} setTheme={setTheme} />
       </div>

@@ -5,7 +5,7 @@ import {
   getCurrentWeekDays,
   getCurrentRoutineBlockIndex,
 } from "@/features/routine/utils/routine-schedule"
-import { getRoutineDayBlocks, getWeekdayFromDateKey } from "@/features/routine/utils/routine-domain"
+import { getRoutineDayBlocksForDateKey, getWeekdayFromDateKey } from "@/features/routine/utils/routine-domain"
 import { useRoutine } from "@/features/routine/hooks/use-routine"
 import { getTodayDateKey, parseDateKey, toDateKey } from "@/utils/date"
 
@@ -56,7 +56,7 @@ export function useRoutineSchedule() {
 
   const activeDay = getWeekdayFromDateKey(activeDateKey)
   const activeDate = parseDateKey(activeDateKey)
-  const activeBlocks = getRoutineDayBlocks(routine, activeDay)
+  const activeBlocks = getRoutineDayBlocksForDateKey(routine, activeDateKey)
   const isSelectedToday = activeDateKey === getTodayDateKey()
 
   return {

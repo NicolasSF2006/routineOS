@@ -21,7 +21,7 @@ export type Weekday =
   | "saturday"
   | "sunday"
 
-export type RoutineBlockType = "study" | "short-break" | "long-break" | "lunch" | "project"
+export type RoutineBlockType = "study" | "short-break" | "long-break" | "lunch" | "project" | "other"
 
 export interface RoutineBlock {
   id: string
@@ -41,11 +41,18 @@ export interface RoutineDay {
   isActive: boolean
 }
 
+export interface RoutineWeek {
+  id: string
+  weekStartDate: string
+  days: RoutineDay[]
+}
+
 export interface Routine {
   id: string
   name: string
   mode: RoutineMode
   days: RoutineDay[]
+  weeks?: RoutineWeek[]
   createdAt: string
   updatedAt: string
 }
