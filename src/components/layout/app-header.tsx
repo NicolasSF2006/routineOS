@@ -1,7 +1,8 @@
 "use client"
 
 import { useState } from "react"
-import { GraduationCap, Menu } from "lucide-react"
+import Image from "next/image"
+import { Menu } from "lucide-react"
 import {
   Sheet,
   SheetContent,
@@ -33,8 +34,16 @@ export function AppHeader({
     <header className="sticky top-0 z-40 border-b border-border/80 bg-background/85 backdrop-blur-md">
       <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:h-16 sm:px-6">
         <div className="flex w-16 items-center gap-2 sm:w-20">
-          <div className="flex size-9 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-            <GraduationCap className="size-5" aria-hidden="true" />
+          <div className="flex size-10 items-center justify-center rounded-xl border border-primary/20 bg-primary/5">
+            <Image
+              src="/logo-routineos.png"
+              alt=""
+              width={32}
+              height={32}
+              priority
+              aria-hidden="true"
+              className="size-8 object-contain"
+            />
           </div>
         </div>
 
