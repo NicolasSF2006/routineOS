@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## v1.7.0
+
+- Adicionado modal de boas-vindas com tutorial em etapas para o primeiro acesso.
+- Adicionado botão para pular o tutorial e botão final para começar a usar.
+- Tutorial passa a aparecer apenas no primeiro acesso, com status salvo no localStorage.
+- Adicionado card de Ajuda nas Configurações com opção de ver o tutorial novamente.
+- Backup agora inclui o status do tutorial.
+- Reset completo remove o status do tutorial para permitir exibição novamente.
+
 ## v1.5.0
 
 - Adicionado card de Dados e backup nas Configurações.

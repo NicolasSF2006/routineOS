@@ -6,7 +6,9 @@ import { CalendarioView } from "@/features/calendar/components/calendar-view"
 import { RoutineView } from "@/features/routine/components/routine-view"
 import { SettingsView } from "@/features/settings/components/settings-view"
 import { RoutineBuilderView } from "@/features/routine-builder/components/routine-builder-view"
-import { STORAGE_KEYS } from "@/constants/storage"
+import { STORAGE_EVENTS, STORAGE_KEYS } from "@/constants/storage"
+import { OnboardingDialog } from "@/features/onboarding/components/onboarding-dialog"
+import { completeOnboarding, hasCompletedOnboarding } from "@/lib/storage"
 import type { ViewKey } from "@/types/navigation"
 
 const VIEW_KEYS: ViewKey[] = ["rotina", "calendario", "configuracoes", "configurar-rotina"]
@@ -17,6 +19,7 @@ function isViewKey(value: string | null): value is ViewKey {
 
 export default function Page() {
   const [view, setCurrentView] = useState<ViewKey>("rotina")
+  const [isOnboardingOpen, setIsOnboardingOpen] = useState(false)
 
   useEffect(() => {
     const storedView = window.localStorage.getItem(STORAGE_KEYS.view)
@@ -24,7 +27,23 @@ export default function Page() {
     if (isViewKey(storedView)) {
       setCurrentView(storedView)
     }
+
+    setIsOnboardingOpen(!hasCompletedOnboarding())
   }, [])
+
+  useEffect(() => {
+    const handleAppDataChanged = () => {
+      setIsOnboardingOpen(!hasCompletedOnboarding())
+    }
+
+    window.addEventListener(STORAGE_EVENTS.appDataChanged, handleAppDataChanged)
+    return () => window.removeEventListener(STORAGE_EVENTS.appDataChanged, handleAppDataChanged)
+  }, [])
+
+  const handleCompleteOnboarding = () => {
+    completeOnboarding()
+    setIsOnboardingOpen(false)
+  }
 
   const navigateToView = (nextView: ViewKey) => {
     setCurrentView(nextView)
@@ -43,7 +62,9 @@ export default function Page() {
       >
         {view === "rotina" ? <RoutineView /> : null}
         {view === "calendario" ? <CalendarioView /> : null}
-        {view === "configuracoes" ? <SettingsView onNavigate={navigateToView} /> : null}
+        {view === "configuracoes" ? (
+          <SettingsView onNavigate={navigateToView} onOpenOnboarding={() => setIsOnboardingOpen(true)} />
+        ) : null}
         {view === "configurar-rotina" ? (
           <RoutineBuilderView
             onBackToSettings={() => navigateToView("configuracoes")}
@@ -51,6 +72,7 @@ export default function Page() {
           />
         ) : null}
       </main>
+      <OnboardingDialog open={isOnboardingOpen} onComplete={handleCompleteOnboarding} />
     </div>
   )
 }

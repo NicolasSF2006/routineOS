@@ -4,6 +4,7 @@ export const STORAGE_KEYS = {
   routine: "routineos-active-routine",
   view: "routineos-current-view",
   theme: "routine-theme",
+  onboardingCompleted: "routineos-onboarding-completed",
 } as const
 
 export const STORAGE_EVENTS = {

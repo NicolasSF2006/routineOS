@@ -43,7 +43,7 @@ export function DataBackupSettingsCard() {
     if (!file) return
 
     const confirmed = window.confirm(
-      "Importar este backup vai substituir rotina, histórico, configurações, tema e tela atual. Deseja continuar?",
+      "Importar este backup vai substituir rotina, histórico, configurações, tema, tela atual e status do tutorial. Deseja continuar?",
     )
 
     if (!confirmed) {
@@ -75,7 +75,7 @@ export function DataBackupSettingsCard() {
 
   const handleResetAllData = () => {
     const confirmed = window.confirm(
-      "Resetar tudo vai apagar rotina personalizada, histórico de estudos, sons importados, metas, tema e tela atual. Esta ação não pode ser desfeita sem backup. Deseja continuar?",
+      "Resetar tudo vai apagar rotina personalizada, histórico de estudos, sons importados, metas, tema, tela atual e status do tutorial. Esta ação não pode ser desfeita sem backup. Deseja continuar?",
     )
 
     if (!confirmed) return
@@ -101,7 +101,7 @@ export function DataBackupSettingsCard() {
           <div className="flex flex-col gap-1">
             <span className="text-base font-medium text-foreground">Backup completo</span>
             <span className="wrap-break-word text-sm text-muted-foreground">
-              Inclui rotina, histórico, configurações, sons importados, tema e última tela acessada.
+              Inclui rotina, histórico, configurações, sons importados, tema, última tela acessada e status do tutorial.
             </span>
           </div>
 

@@ -417,6 +417,23 @@ export function getActiveRoutine(): Routine {
   return getStoredRoutine() ?? DEFAULT_ROUTINE
 }
 
+export function hasCompletedOnboarding(): boolean {
+  if (typeof window === "undefined") return true
+  return window.localStorage.getItem(STORAGE_KEYS.onboardingCompleted) === "true"
+}
+
+export function completeOnboarding(): void {
+  if (typeof window === "undefined") return
+  window.localStorage.setItem(STORAGE_KEYS.onboardingCompleted, "true")
+  notifyAppDataChanged()
+}
+
+export function resetOnboarding(): void {
+  if (typeof window === "undefined") return
+  window.localStorage.removeItem(STORAGE_KEYS.onboardingCompleted)
+  notifyAppDataChanged()
+}
+
 export interface RoutineOSBackup {
   app: "RoutineOS"
   schemaVersion: number
@@ -427,6 +444,7 @@ export interface RoutineOSBackup {
     routine: Routine | null
     view: string | null
     theme: Theme | null
+    onboardingCompleted: boolean
   }
 }
 
@@ -447,6 +465,7 @@ function normalizeBackup(raw: unknown): RoutineOSBackup | null {
       routine: data.routine === null ? null : normalizeRoutine(data.routine),
       view: typeof data.view === "string" ? data.view : null,
       theme: isTheme(data.theme) ? data.theme : null,
+      onboardingCompleted: data.onboardingCompleted === true,
     },
   }
 }
@@ -465,6 +484,7 @@ export function createRoutineOSBackup(): RoutineOSBackup {
       routine: getStoredRoutine(),
       view: typeof view === "string" ? view : null,
       theme: isTheme(theme) ? theme : null,
+      onboardingCompleted: hasCompletedOnboarding(),
     },
   }
 }
@@ -496,6 +516,12 @@ export function importRoutineOSBackup(raw: unknown): RoutineOSBackup {
     } else {
       window.localStorage.removeItem(STORAGE_KEYS.theme)
     }
+
+    if (backup.data.onboardingCompleted) {
+      window.localStorage.setItem(STORAGE_KEYS.onboardingCompleted, "true")
+    } else {
+      window.localStorage.removeItem(STORAGE_KEYS.onboardingCompleted)
+    }
   }
 
   notifyAllDataChanged()
@@ -510,6 +536,7 @@ export function resetStoredAppData(): void {
   window.localStorage.removeItem(STORAGE_KEYS.routine)
   window.localStorage.removeItem(STORAGE_KEYS.view)
   window.localStorage.removeItem(STORAGE_KEYS.theme)
+  window.localStorage.removeItem(STORAGE_KEYS.onboardingCompleted)
 
   notifyAllDataChanged()
 }

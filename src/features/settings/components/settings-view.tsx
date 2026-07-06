@@ -5,6 +5,7 @@ import { useTheme } from "@/components/providers/theme-provider"
 import { AppearanceSettingsCard } from "@/features/settings/components/appearance-settings-card"
 import { DataBackupSettingsCard } from "@/features/settings/components/data-backup-settings-card"
 import { GoalsSettingsCard } from "@/features/settings/components/goals-settings-card"
+import { HelpSettingsCard } from "@/features/settings/components/help-settings-card"
 import { RoutineSettingsCard } from "@/features/settings/components/routine-settings-card"
 import { SoundSettingsCard } from "@/features/settings/components/sound-settings-card"
 import { useStudySettings } from "@/hooks/use-study-settings"
@@ -13,9 +14,10 @@ import type { ViewKey } from "@/types/navigation"
 
 interface SettingsViewProps {
   onNavigate: (view: ViewKey) => void
+  onOpenOnboarding: () => void
 }
 
-export function SettingsView({ onNavigate }: SettingsViewProps) {
+export function SettingsView({ onNavigate, onOpenOnboarding }: SettingsViewProps) {
   const { theme, setTheme } = useTheme()
   const { settings, updateSettings, hydrated } = useStudySettings()
   const { routine, hasCustomRoutine, isLoading: routineLoading } = useRoutine()
@@ -41,6 +43,7 @@ export function SettingsView({ onNavigate }: SettingsViewProps) {
         />
         <GoalsSettingsCard settings={settings} updateSettings={updateSettings} />
         <AppearanceSettingsCard theme={theme} setTheme={setTheme} />
+        <HelpSettingsCard onOpenOnboarding={onOpenOnboarding} />
         <div className="md:col-span-2">
           <DataBackupSettingsCard />
         </div>
