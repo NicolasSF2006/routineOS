@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import type { DragEvent } from "react"
 import {
   ChevronLeft,
   ChevronRight,
@@ -35,7 +36,7 @@ import {
 } from "@/features/routine-builder/utils/routine-builder"
 import { cn } from "@/lib/utils"
 import { getMonthLabel, getTodayDateKey, parseDateKey, toDateKey } from "@/utils/date"
-import type { RoutineBlock, RoutineBlockType, RoutineDay, RoutineWeek, Weekday } from "@/types/study"
+import type { Routine, RoutineBlock, RoutineBlockType, RoutineDay, RoutineWeek, Weekday } from "@/types/study"
 
 interface RoutineBuilderViewProps {
   onBackToSettings: () => void
@@ -51,6 +52,30 @@ interface EditingState {
   title: string
   durationMinutes: number
   blockId?: string
+}
+
+const DND_MIME_TYPE = "application/routineos-routine-block"
+
+type DragPayload =
+  | { kind: "palette"; blockType: RoutineBlockType }
+  | { kind: "block"; sourceWeekday: Weekday; blockId: string }
+
+function readDragPayload(event: DragEvent<HTMLElement>): DragPayload | null {
+  const rawPayload = event.dataTransfer.getData(DND_MIME_TYPE) || event.dataTransfer.getData("text/plain")
+
+  if (!rawPayload) return null
+
+  try {
+    const parsedPayload = JSON.parse(rawPayload) as DragPayload
+
+    if (parsedPayload.kind === "palette" || parsedPayload.kind === "block") {
+      return parsedPayload
+    }
+  } catch {
+    return null
+  }
+
+  return null
 }
 
 function buildWeekDays(baseDate: Date) {
@@ -124,29 +149,51 @@ function createBlockFromEditing(editing: EditingState): RoutineBlock {
 export function RoutineBuilderView({ onBackToSettings, onNavigateToRoutine }: RoutineBuilderViewProps) {
   const { routine, saveRoutine, isLoading } = useRoutine()
   const [selectedDateKey, setSelectedDateKey] = useState(() => getTodayDateKey())
+  const [draftRoutine, setDraftRoutine] = useState<Routine | null>(null)
   const [draftWeek, setDraftWeek] = useState<RoutineWeek | null>(null)
   const [openMenuBlockId, setOpenMenuBlockId] = useState<string | null>(null)
   const [editing, setEditing] = useState<EditingState | null>(null)
   const [isSaved, setIsSaved] = useState(false)
+  const [dragOverWeekday, setDragOverWeekday] = useState<Weekday | null>(null)
+  const [dragOverBlockId, setDragOverBlockId] = useState<string | null>(null)
+  const [draggingBlockId, setDraggingBlockId] = useState<string | null>(null)
 
   const selectedDate = parseDateKey(selectedDateKey)
   const selectedWeekday = getWeekdayFromDateKey(selectedDateKey)
   const weekDays = useMemo(() => buildWeekDays(selectedDate), [selectedDateKey])
   const selectedMonthLabel = getMonthLabel(selectedDate.getFullYear(), selectedDate.getMonth())
-  const startTime = getRoutineStartTime(routine)
+  const activeDraftRoutine = draftRoutine ?? routine
+  const startTime = getRoutineStartTime(activeDraftRoutine)
 
   useEffect(() => {
-    setDraftWeek(createRoutineWeekFromDate(selectedDateKey, routine))
+    if (isLoading) return
+    setDraftRoutine(routine)
+  }, [isLoading, routine])
+
+  useEffect(() => {
+    if (!draftRoutine) return
+
+    setDraftWeek(createRoutineWeekFromDate(selectedDateKey, draftRoutine))
     setOpenMenuBlockId(null)
     setEditing(null)
+    setDragOverWeekday(null)
+    setDragOverBlockId(null)
+    setDraggingBlockId(null)
     setIsSaved(false)
-  }, [routine, selectedDateKey])
+  }, [draftRoutine, selectedDateKey])
 
   const selectedDay = draftWeek ? getRoutineWeekDay(draftWeek, selectedWeekday) : null
 
+  const getRoutineWithCurrentDraftWeek = (baseRoutine: Routine = activeDraftRoutine) => {
+    return draftWeek ? upsertRoutineWeek(baseRoutine, cloneRoutineWeek(draftWeek)) : baseRoutine
+  }
+
   const moveWeek = (direction: -1 | 1) => {
+    const nextRoutine = getRoutineWithCurrentDraftWeek()
     const nextDate = parseDateKey(selectedDateKey)
+
     nextDate.setDate(nextDate.getDate() + direction * 7)
+    setDraftRoutine(nextRoutine)
     setSelectedDateKey(toDateKey(nextDate))
   }
 
@@ -276,9 +323,151 @@ export function RoutineBuilderView({ onBackToSettings, onNavigateToRoutine }: Ro
     })
   }
 
+  const clearDragState = () => {
+    setDragOverWeekday(null)
+    setDragOverBlockId(null)
+    setDraggingBlockId(null)
+  }
+
+  const createBlockFromType = (type: RoutineBlockType, weekday: Weekday): RoutineBlock => {
+    const defaults = getEditingDefaults(type)
+
+    return {
+      id: createId(`block-${weekday}`),
+      type,
+      title: defaults.title,
+      durationMinutes: defaults.durationMinutes,
+      startTime: "00:00",
+      endTime: "00:00",
+      order: 1,
+    }
+  }
+
+  const insertBlockIntoDay = (weekday: Weekday, block: RoutineBlock, targetBlockId?: string) => {
+    updateDraftDay(weekday, (day) => {
+      const blocks = [...day.blocks]
+      const targetIndex = targetBlockId ? blocks.findIndex((item) => item.id === targetBlockId) : -1
+      const insertIndex = targetIndex >= 0 ? targetIndex : blocks.length
+
+      blocks.splice(insertIndex, 0, block)
+
+      return { ...day, blocks }
+    })
+  }
+
+  const moveBlockToDay = (sourceWeekday: Weekday, blockId: string, targetWeekday: Weekday, targetBlockId?: string) => {
+    if (!draftWeek || blockId === targetBlockId) return
+
+    const sourceDay = getRoutineWeekDay(draftWeek, sourceWeekday)
+    const movedBlock = sourceDay.blocks.find((block) => block.id === blockId)
+
+    if (!movedBlock) return
+
+    const withoutSourceBlock = updateRoutineWeekDay(draftWeek, sourceWeekday, (day) => ({
+      ...day,
+      blocks: day.blocks.filter((block) => block.id !== blockId),
+    }))
+
+    const blockToInsert: RoutineBlock = {
+      ...movedBlock,
+      id: sourceWeekday === targetWeekday ? movedBlock.id : createId(`block-${targetWeekday}`),
+    }
+
+    const withMovedBlock = updateRoutineWeekDay(withoutSourceBlock, targetWeekday, (day) => {
+      const blocks = [...day.blocks]
+      const targetIndex = targetBlockId ? blocks.findIndex((block) => block.id === targetBlockId) : -1
+      const insertIndex = targetIndex >= 0 ? targetIndex : blocks.length
+
+      blocks.splice(insertIndex, 0, blockToInsert)
+
+      return { ...day, blocks }
+    })
+
+    const recalculatedWeek = {
+      ...withMovedBlock,
+      days: withMovedBlock.days.map((day) =>
+        day.weekday === sourceWeekday || day.weekday === targetWeekday
+          ? {
+              ...day,
+              blocks: recalculateRoutineDayBlocks(day.blocks, startTime),
+              isActive: day.blocks.length > 0,
+            }
+          : day,
+      ),
+    }
+
+    setDraftWeek(recalculatedWeek)
+    setOpenMenuBlockId(null)
+    setIsSaved(false)
+  }
+
+  const handlePaletteDragStart = (event: DragEvent<HTMLButtonElement>, blockType: RoutineBlockType) => {
+    const payload: DragPayload = { kind: "palette", blockType }
+
+    event.dataTransfer.effectAllowed = "copy"
+    event.dataTransfer.setData(DND_MIME_TYPE, JSON.stringify(payload))
+    event.dataTransfer.setData("text/plain", JSON.stringify(payload))
+  }
+
+  const handleBlockDragStart = (event: DragEvent<HTMLDivElement>, block: RoutineBlock, weekday: Weekday) => {
+    const payload: DragPayload = { kind: "block", sourceWeekday: weekday, blockId: block.id }
+
+    event.dataTransfer.effectAllowed = "move"
+    event.dataTransfer.setData(DND_MIME_TYPE, JSON.stringify(payload))
+    event.dataTransfer.setData("text/plain", JSON.stringify(payload))
+    setDraggingBlockId(block.id)
+    setOpenMenuBlockId(null)
+  }
+
+  const handleDayDragOver = (event: DragEvent<HTMLElement>, weekday: Weekday) => {
+    event.preventDefault()
+    event.dataTransfer.dropEffect = draggingBlockId ? "move" : "copy"
+    setDragOverWeekday(weekday)
+    setDragOverBlockId(null)
+  }
+
+  const handleBlockDragOver = (event: DragEvent<HTMLDivElement>, weekday: Weekday, blockId: string) => {
+    event.preventDefault()
+    event.stopPropagation()
+    event.dataTransfer.dropEffect = draggingBlockId ? "move" : "copy"
+    setDragOverWeekday(weekday)
+    setDragOverBlockId(blockId)
+  }
+
+  const handleDrop = (event: DragEvent<HTMLElement>, weekday: Weekday, targetBlockId?: string) => {
+    event.preventDefault()
+    event.stopPropagation()
+
+    const payload = readDragPayload(event)
+
+    if (!payload) {
+      clearDragState()
+      return
+    }
+
+    if (payload.kind === "palette") {
+      insertBlockIntoDay(weekday, createBlockFromType(payload.blockType, weekday), targetBlockId)
+    } else {
+      moveBlockToDay(payload.sourceWeekday, payload.blockId, weekday, targetBlockId)
+    }
+
+    clearDragState()
+  }
+
   const saveCurrentWeek = () => {
     if (!draftWeek) return
-    saveRoutine(upsertRoutineWeek(routine, cloneRoutineWeek(draftWeek)))
+    const nextRoutine = getRoutineWithCurrentDraftWeek()
+
+    setDraftRoutine(nextRoutine)
+    saveRoutine(nextRoutine)
+    setIsSaved(true)
+  }
+
+  const saveCurrentMonthRoutine = () => {
+    const nextRoutine = getRoutineWithCurrentDraftWeek()
+
+    setDraftRoutine(nextRoutine)
+    saveRoutine(nextRoutine)
     setIsSaved(true)
   }
 
@@ -312,13 +501,13 @@ export function RoutineBuilderView({ onBackToSettings, onNavigateToRoutine }: Ro
           isActive: false,
         })),
       })
-    }, routine)
+    }, getRoutineWithCurrentDraftWeek())
 
-    saveRoutine(nextRoutine)
+    setDraftRoutine(nextRoutine)
     setDraftWeek(createRoutineWeekFromDate(selectedDateKey, nextRoutine))
     setOpenMenuBlockId(null)
     setEditing(null)
-    setIsSaved(true)
+    setIsSaved(false)
   }
 
   if (isLoading || !draftWeek || !selectedDay) {
@@ -404,13 +593,19 @@ export function RoutineBuilderView({ onBackToSettings, onNavigateToRoutine }: Ro
 
                     <div
                       className={cn(
-                        "flex min-h-[640px] flex-col gap-4",
+                        "flex min-h-[640px] flex-col gap-4 rounded-2xl transition-colors",
                         index === 0 ? "pr-2" : "border-l border-border/30 pl-4 pr-2",
+                        dragOverWeekday === day.key && "bg-primary/[0.04] ring-1 ring-primary/30",
                       )}
+                      onDragOver={(event) => handleDayDragOver(event, day.key)}
+                      onDrop={(event) => handleDrop(event, day.key)}
+                      onDragEnd={clearDragState}
                     >
                       <button
                         type="button"
                         onClick={() => openCreateDialog("study", day.key)}
+                        onDragOver={(event) => handleDayDragOver(event, day.key)}
+                        onDrop={(event) => handleDrop(event, day.key)}
                         className="order-last flex min-h-[76px] w-full items-center justify-center rounded-2xl border border-dashed border-border/70 bg-muted/10 text-base font-medium text-muted-foreground transition-colors hover:border-primary/70 hover:bg-primary/5 hover:text-primary"
                         aria-label={`Adicionar bloco em ${day.label}`}
                       >
@@ -424,9 +619,16 @@ export function RoutineBuilderView({ onBackToSettings, onNavigateToRoutine }: Ro
                         return (
                           <div
                             key={block.id}
+                            draggable
+                            onDragStart={(event) => handleBlockDragStart(event, block, day.key)}
+                            onDragOver={(event) => handleBlockDragOver(event, day.key, block.id)}
+                            onDrop={(event) => handleDrop(event, day.key, block.id)}
+                            onDragEnd={clearDragState}
                             className={cn(
-                              "relative min-h-[112px] rounded-2xl border p-4 text-left shadow-sm transition-colors",
+                              "relative min-h-[112px] cursor-grab rounded-2xl border p-4 text-left shadow-sm transition-colors active:cursor-grabbing",
                               option.className,
+                              draggingBlockId === block.id && "opacity-50",
+                              dragOverBlockId === block.id && "ring-2 ring-primary/60",
                             )}
                           >
                             <div className="flex items-start justify-between gap-2">
@@ -528,7 +730,7 @@ export function RoutineBuilderView({ onBackToSettings, onNavigateToRoutine }: Ro
               Limpar
             </Button>
 
-            <Button type="button" onClick={repeatCurrentWeekForMonth}>
+            <Button type="button" onClick={saveCurrentMonthRoutine}>
               <Save className="mr-2 size-4" />
               Salvar
             </Button>
@@ -545,9 +747,12 @@ export function RoutineBuilderView({ onBackToSettings, onNavigateToRoutine }: Ro
                 <button
                   key={option.type}
                   type="button"
+                  draggable
+                  onDragStart={(event) => handlePaletteDragStart(event, option.type)}
+                  onDragEnd={clearDragState}
                   onClick={() => openCreateDialog(option.type)}
                   className={cn(
-                    "rounded-2xl border p-4 text-left shadow-sm transition-transform hover:-translate-y-0.5 hover:shadow-md",
+                    "cursor-grab rounded-2xl border p-4 text-left shadow-sm transition-transform hover:-translate-y-0.5 hover:shadow-md active:cursor-grabbing",
                     option.className,
                   )}
                 >

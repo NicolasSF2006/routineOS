@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## v1.3.1
+
+- Adicionado drag-and-drop nativo no configurador visual de rotina.
+- Blocos da lateral agora podem ser arrastados para qualquer dia da semana.
+- Blocos existentes podem ser movidos entre dias e reordenados dentro do mesmo dia.
+- Adicionado destaque visual na coluna e no bloco-alvo durante o arraste.
+- Mantido o botão de adicionar bloco como alternativa ao drag-and-drop.
+
 ## v1.3.0
 
 - Adicionada tela inicial de configuração visual da rotina.

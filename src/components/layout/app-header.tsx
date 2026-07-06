@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { GraduationCap, Menu, Moon, Sun } from "lucide-react"
+import { GraduationCap, Menu } from "lucide-react"
 import {
   Sheet,
   SheetContent,
@@ -12,7 +12,6 @@ import {
 } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
 import { NAV_ITEMS } from "@/constants/navigation"
-import { useTheme } from "@/components/providers/theme-provider"
 import { cn } from "@/lib/utils"
 import type { ViewKey } from "@/types/navigation"
 
@@ -24,7 +23,6 @@ export function AppHeader({
   onNavigate: (view: ViewKey) => void
 }) {
   const [open, setOpen] = useState(false)
-  const { theme, toggleTheme } = useTheme()
 
   const handleNavigate = (view: ViewKey) => {
     onNavigate(view)
@@ -47,15 +45,6 @@ export function AppHeader({
         </div>
 
         <div className="flex w-20 items-center justify-end gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={toggleTheme}
-            aria-label={theme === "dark" ? "Ativar tema claro" : "Ativar tema escuro"}
-            className="rounded-xl"
-          >
-            {theme === "dark" ? <Sun className="size-5" /> : <Moon className="size-5" />}
-          </Button>
 
           <Sheet open={open} onOpenChange={setOpen}>
             <SheetTrigger
