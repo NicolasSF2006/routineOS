@@ -34,7 +34,12 @@ export function AppHeader({
     <header className="sticky top-0 z-40 border-b border-border/80 bg-background/85 backdrop-blur-md">
       <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:h-16 sm:px-6">
         <div className="flex w-16 items-center gap-2 sm:w-20">
-          <div className="flex size-10 items-center justify-center rounded-xl border border-primary/20 bg-primary/5">
+          <button
+            type="button"
+            onClick={() => onNavigate("rotina")}
+            className="flex size-10 cursor-pointer items-center justify-center rounded-xl border border-primary/20 bg-primary/5 transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label="Ir para a rotina"
+          >
             <Image
               src="/logo-routineos.png"
               alt=""
@@ -44,7 +49,7 @@ export function AppHeader({
               aria-hidden="true"
               className="size-8 object-contain"
             />
-          </div>
+          </button>
         </div>
 
         <div className="flex min-w-0 flex-1 flex-col items-center px-3">
