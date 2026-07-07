@@ -1,4 +1,4 @@
-import { Bot, Calendar, GraduationCap, Settings } from "lucide-react"
+import { Calendar, GraduationCap, Settings } from "lucide-react"
 import type { NavigationItem } from "@/types/navigation"
 
 export const NAV_ITEMS: NavigationItem[] = [
@@ -13,12 +13,6 @@ export const NAV_ITEMS: NavigationItem[] = [
     label: "Calendário",
     description: "Acompanhe seu mês",
     icon: Calendar,
-  },
-  {
-    key: "mentor",
-    label: "Mentor IA",
-    description: "Converse sobre rotina e estudos",
-    icon: Bot,
   },
   {
     key: "configuracoes",

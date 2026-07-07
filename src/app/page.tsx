@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { AppHeader } from "@/components/layout/app-header"
 import { CalendarioView } from "@/features/calendar/components/calendar-view"
-import { MentorView } from "@/features/mentor/components/mentor-view"
+import { MentorWidget } from "@/features/mentor/components/mentor-widget"
 import { RoutineView } from "@/features/routine/components/routine-view"
 import { SettingsView } from "@/features/settings/components/settings-view"
 import { RoutineBuilderView } from "@/features/routine-builder/components/routine-builder-view"
@@ -12,7 +12,7 @@ import { OnboardingDialog } from "@/features/onboarding/components/onboarding-di
 import { completeOnboarding, hasCompletedOnboarding } from "@/lib/storage"
 import type { ViewKey } from "@/types/navigation"
 
-const VIEW_KEYS: ViewKey[] = ["rotina", "calendario", "configuracoes", "configurar-rotina", "mentor"]
+const VIEW_KEYS: ViewKey[] = ["rotina", "calendario", "configuracoes", "configurar-rotina"]
 
 function isViewKey(value: string | null): value is ViewKey {
   return value !== null && VIEW_KEYS.includes(value as ViewKey)
@@ -27,6 +27,8 @@ export default function Page() {
 
     if (isViewKey(storedView)) {
       setCurrentView(storedView)
+    } else if (storedView === "mentor") {
+      window.localStorage.setItem(STORAGE_KEYS.view, "rotina")
     }
 
     setIsOnboardingOpen(!hasCompletedOnboarding())
@@ -63,7 +65,6 @@ export default function Page() {
       >
         {view === "rotina" ? <RoutineView /> : null}
         {view === "calendario" ? <CalendarioView /> : null}
-        {view === "mentor" ? <MentorView currentView={view} /> : null}
         {view === "configuracoes" ? (
           <SettingsView onNavigate={navigateToView} onOpenOnboarding={() => setIsOnboardingOpen(true)} />
         ) : null}
@@ -75,6 +76,7 @@ export default function Page() {
         ) : null}
       </main>
       <OnboardingDialog open={isOnboardingOpen} onComplete={handleCompleteOnboarding} />
+      <MentorWidget currentView={view} />
     </div>
   )
 }
