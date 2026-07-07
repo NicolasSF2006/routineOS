@@ -1,10 +1,6 @@
 import { NextResponse } from "next/server"
-import {
-  createMockMentorReply,
-  createOpenAIMentorReply,
-  DEFAULT_OPENAI_MODEL,
-} from "@/features/mentor/server/openai-mentor"
-import type { MentorApiResponse, MentorContext, MentorMessage } from "@/features/mentor/types"
+import { createMentorReply } from "@/features/mentor/server/mentor-provider-router"
+import type { MentorContext, MentorMessage } from "@/features/mentor/types"
 
 export const dynamic = "force-dynamic"
 
@@ -89,35 +85,11 @@ export async function POST(request: Request) {
     return jsonError("Não foi possível ler o contexto do RoutineOS.", 400)
   }
 
-  const history = sanitizeHistory(body.history)
-  const apiKey = process.env.OPENAI_API_KEY?.trim()
+  const response = await createMentorReply({
+    message,
+    history: sanitizeHistory(body.history),
+    context,
+  })
 
-  if (!apiKey) {
-    const response: MentorApiResponse = {
-      reply: createMockMentorReply(message, context),
-      mode: "mock",
-    }
-
-    return NextResponse.json(response)
-  }
-
-  try {
-    const reply = await createOpenAIMentorReply({
-      apiKey,
-      model: process.env.OPENAI_MODEL?.trim() || DEFAULT_OPENAI_MODEL,
-      message,
-      history,
-      context,
-    })
-    const response: MentorApiResponse = { reply, mode: "openai" }
-
-    return NextResponse.json(response)
-  } catch {
-    const response: MentorApiResponse = {
-      reply: createMockMentorReply(message, context, "não consegui acessar a API agora"),
-      mode: "mock",
-    }
-
-    return NextResponse.json(response)
-  }
+  return NextResponse.json(response)
 }

@@ -69,7 +69,9 @@ export interface MentorContext {
   onboardingCompleted: boolean
 }
 
+export type MentorApiResponseMode = "gemini" | "groq" | "openrouter" | "openai" | "mock"
+
 export interface MentorApiResponse {
   reply: string
-  mode: "openai" | "mock"
+  mode: MentorApiResponseMode
 }
