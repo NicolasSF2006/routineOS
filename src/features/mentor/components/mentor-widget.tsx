@@ -33,7 +33,7 @@ export function MentorWidget({ currentView }: { currentView: ViewKey }) {
       ) : null}
 
       {!isOpen ? (
-        <div className="fixed bottom-4 right-4 z-[55] flex items-center gap-2 sm:bottom-5 sm:right-5">
+        <div className="fixed bottom-20 right-4 z-[55] flex items-center gap-2 sm:bottom-24 sm:right-5">
           <div className="group flex items-center gap-2">
             <span className="pointer-events-none hidden translate-x-2 rounded-full border border-border/70 bg-popover px-3 py-2 text-sm font-medium text-popover-foreground opacity-0 shadow-lg transition-all duration-200 group-hover:translate-x-0 group-hover:opacity-100 sm:block">
               Mentor IA

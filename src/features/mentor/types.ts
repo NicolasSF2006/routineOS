@@ -45,6 +45,33 @@ export interface MentorContextMonthTopic {
   totalMinutes: number
 }
 
+export type StudyTopicMasteryStatus = "starting" | "studying" | "understood" | "review" | "difficulty"
+
+export interface MentorContextTrailResourceSignal {
+  id: string
+  title: string
+  provider: string
+  type: StudyResourceType
+  section: "resource" | "video"
+}
+
+export interface MentorContextTrailTopicSignal {
+  id: string
+  title: string
+  focus: string | null
+  masteryStatus: StudyTopicMasteryStatus | null
+  favoriteResources: MentorContextTrailResourceSignal[]
+  studiedResources: MentorContextTrailResourceSignal[]
+  hiddenResources: MentorContextTrailResourceSignal[]
+}
+
+export interface MentorContextTrailSignal {
+  hasTrail: boolean
+  title: string | null
+  routineName: string | null
+  topics: MentorContextTrailTopicSignal[]
+}
+
 export interface MentorContext {
   currentView: ViewKey
   today: string
@@ -73,6 +100,7 @@ export interface MentorContext {
     studyBlockCount: number
     topics: MentorContextMonthTopic[]
   }
+  studyTrail: MentorContextTrailSignal
   settings: {
     routineMode: RoutineMode
     dailyGoalHours: number
@@ -153,6 +181,11 @@ export interface StudyTrailTopic {
   focusOptions?: StudyTopicFocusOption[]
   selectedFocusId?: string | null
   selectedFocusLabel?: string | null
+  hiddenResourceIds?: string[]
+  favoriteResourceIds?: string[]
+  studiedResourceIds?: string[]
+  masteryStatus?: StudyTopicMasteryStatus | null
+  masteryUpdatedAt?: string | null
 }
 
 export interface StudyTrail {

@@ -18,7 +18,14 @@ import type {
   SoundPreference,
 } from "@/types/study"
 import type { Theme } from "@/types/theme"
-import type { MentorMessage, StudyTrail, StudyTopicFocusOption, FreeStudyResource, StudyResourceTopicKey } from "@/features/mentor/types"
+import type {
+  MentorMessage,
+  StudyTrail,
+  StudyTopicFocusOption,
+  FreeStudyResource,
+  StudyResourceTopicKey,
+  StudyTopicMasteryStatus,
+} from "@/features/mentor/types"
 
 const ROUTINE_MODE_COMPAT: Record<string, RoutineMode> = {
   "sem-trabalho": "no-work",
@@ -111,6 +118,28 @@ function normalizeString(value: unknown, fallback: string): string {
 
 function normalizeOptionalString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim().length > 0 ? value : undefined
+}
+
+function normalizeStringList(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+
+  return Array.from(
+    new Set(
+      value
+        .filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+        .map((item) => item.trim()),
+    ),
+  )
+}
+
+function normalizeStudyTopicMasteryStatus(value: unknown): StudyTopicMasteryStatus | null {
+  return value === "starting" ||
+    value === "studying" ||
+    value === "understood" ||
+    value === "review" ||
+    value === "difficulty"
+    ? value
+    : null
 }
 
 function normalizeNumber(value: unknown, fallback: number): number {
@@ -490,6 +519,11 @@ function normalizeStudyTrailTopic(raw: unknown, index: number): StudyTrail["topi
       : [],
     selectedFocusId: typeof raw.selectedFocusId === "string" ? raw.selectedFocusId : null,
     selectedFocusLabel: typeof raw.selectedFocusLabel === "string" ? raw.selectedFocusLabel : null,
+    hiddenResourceIds: normalizeStringList(raw.hiddenResourceIds),
+    favoriteResourceIds: normalizeStringList(raw.favoriteResourceIds),
+    studiedResourceIds: normalizeStringList(raw.studiedResourceIds),
+    masteryStatus: normalizeStudyTopicMasteryStatus(raw.masteryStatus),
+    masteryUpdatedAt: typeof raw.masteryUpdatedAt === "string" ? raw.masteryUpdatedAt : null,
   }
 }
 

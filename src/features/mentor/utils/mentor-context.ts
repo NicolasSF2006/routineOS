@@ -11,6 +11,7 @@ import {
   getStoredRoutine,
   hasCompletedOnboarding,
   loadAllRecords,
+  loadMentorTrails,
   loadSettings,
 } from "@/lib/storage"
 import { dateKeyFromParts, getCurrentMonthMeta, getTodayDateKey } from "@/utils/date"
@@ -20,6 +21,8 @@ import type {
   MentorContextDayRoutine,
   MentorContextMonthRecord,
   MentorContextMonthTopic,
+  MentorContextTrailResourceSignal,
+  StudyTrailTopic,
 } from "@/features/mentor/types"
 import type { ViewKey } from "@/types/navigation"
 import type { Routine } from "@/types/study"
@@ -148,6 +151,63 @@ function summarizeMonthHistory(year: number, month: number): MentorContextMonthR
     }))
 }
 
+function summarizeTrailResource(
+  resource: StudyTrailTopic["resources"][number],
+  section: MentorContextTrailResourceSignal["section"],
+): MentorContextTrailResourceSignal {
+  return {
+    id: resource.id,
+    title: resource.title,
+    provider: resource.provider,
+    type: resource.type,
+    section,
+  }
+}
+
+function summarizeStudyTrail(): MentorContext["studyTrail"] {
+  const activeTrail = loadMentorTrails()[0]
+
+  if (!activeTrail) {
+    return {
+      hasTrail: false,
+      title: null,
+      routineName: null,
+      topics: [],
+    }
+  }
+
+  return {
+    hasTrail: true,
+    title: activeTrail.title,
+    routineName: activeTrail.routineName,
+    topics: activeTrail.topics.slice(0, 30).map((topic) => {
+      const resources = [
+        ...topic.resources.map((resource) => ({ resource, section: "resource" as const })),
+        ...(topic.videoResources ?? []).map((resource) => ({ resource, section: "video" as const })),
+      ]
+      const favoriteIds = new Set(topic.favoriteResourceIds ?? [])
+      const studiedIds = new Set(topic.studiedResourceIds ?? [])
+      const hiddenIds = new Set(topic.hiddenResourceIds ?? [])
+
+      return {
+        id: topic.id,
+        title: topic.title,
+        focus: topic.selectedFocusLabel ?? null,
+        masteryStatus: topic.masteryStatus ?? null,
+        favoriteResources: resources
+          .filter(({ resource }) => favoriteIds.has(resource.id))
+          .map(({ resource, section }) => summarizeTrailResource(resource, section)),
+        studiedResources: resources
+          .filter(({ resource }) => studiedIds.has(resource.id))
+          .map(({ resource, section }) => summarizeTrailResource(resource, section)),
+        hiddenResources: resources
+          .filter(({ resource }) => hiddenIds.has(resource.id))
+          .map(({ resource, section }) => summarizeTrailResource(resource, section)),
+      }
+    }),
+  }
+}
+
 export function buildMentorContext({ currentView }: { currentView: ViewKey }): MentorContext {
   const today = getTodayDateKey()
   const routine = getActiveRoutine()
@@ -179,6 +239,7 @@ export function buildMentorContext({ currentView }: { currentView: ViewKey }): M
     },
     monthHistory,
     monthRoutine: summarizeMonthRoutine(routine, year, month),
+    studyTrail: summarizeStudyTrail(),
     settings: {
       routineMode: settings.routineMode,
       dailyGoalHours: settings.dailyGoalHours,

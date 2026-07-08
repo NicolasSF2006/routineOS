@@ -655,6 +655,11 @@ function createTopicFromSource(source: StudyBlockTopicSource): StudyTrailTopic {
     focusOptions: broadDefinition ? createBroadTopicOptions(broadDefinition) : [],
     selectedFocusId: null,
     selectedFocusLabel: null,
+    hiddenResourceIds: [],
+    favoriteResourceIds: [],
+    studiedResourceIds: [],
+    masteryStatus: null,
+    masteryUpdatedAt: null,
   }
 }
 

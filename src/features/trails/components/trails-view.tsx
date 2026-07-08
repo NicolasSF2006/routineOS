@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { BookOpen, ExternalLink, Loader2, Plus, Search, Trash2 } from "lucide-react"
+import { BookOpen, Check, Loader2, Plus, Search, Star, Trash2 } from "lucide-react"
 import { PageHeading } from "@/components/shared/page-heading"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -15,6 +15,22 @@ import {
 import { cn } from "@/lib/utils"
 import { loadMentorTrails, saveMentorTrails } from "@/lib/storage"
 import type { StudyTrail, StudyTrailApiResponse, StudyTrailTopic } from "@/features/mentor/types"
+
+function toggleResourceId(resourceIds: string[] | undefined, resourceId: string): string[] {
+  const currentIds = new Set(resourceIds ?? [])
+
+  if (currentIds.has(resourceId)) {
+    currentIds.delete(resourceId)
+  } else {
+    currentIds.add(resourceId)
+  }
+
+  return Array.from(currentIds)
+}
+
+function removeResourceId(resourceIds: string[] | undefined, resourceId: string): string[] {
+  return (resourceIds ?? []).filter((id) => id !== resourceId)
+}
 
 function formatTopicMeta(topic: StudyTrailTopic): string {
   const parts: string[] = []
@@ -118,41 +134,101 @@ function TopicList({
 function ResourceLinkList({
   resources,
   emptyMessage,
+  topic,
+  onToggleFavorite,
+  onToggleStudied,
+  onDeleteResource,
 }: {
   resources: StudyTrailTopic["resources"]
   emptyMessage: string
+  topic: StudyTrailTopic
+  onToggleFavorite: (topicId: string, resourceId: string) => void
+  onToggleStudied: (topicId: string, resourceId: string) => void
+  onDeleteResource: (topicId: string, resourceId: string, resourceTitle: string, topicTitle: string) => void
 }) {
-  if (resources.length === 0) {
+  const hiddenIds = new Set(topic.hiddenResourceIds ?? [])
+  const favoriteIds = new Set(topic.favoriteResourceIds ?? [])
+  const studiedIds = new Set(topic.studiedResourceIds ?? [])
+  const visibleResources = resources.filter((resource) => !hiddenIds.has(resource.id))
+
+  if (visibleResources.length === 0) {
     return (
       <p className="wrap-break-word rounded-xl border border-dashed border-border/70 px-3 py-3 text-sm leading-6 text-muted-foreground">
-        {emptyMessage}
+        {resources.length > 0 ? "Todos os recursos desta seção foram ocultados." : emptyMessage}
       </p>
     )
   }
 
   return (
     <div className="grid gap-2">
-      {resources.map((resource, resourceIndex) => (
-        <a
-          key={`${resource.id}-${resourceIndex}`}
-          href={resource.url}
-          target="_blank"
-          rel="noreferrer"
-          className="group rounded-xl border border-border/70 bg-background/75 px-3 py-2 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <span className="flex min-w-0 items-start justify-between gap-2">
-            <span className="min-w-0">
-              <span className="wrap-break-word block text-sm font-medium text-foreground group-hover:text-primary">
-                {resource.title}
-              </span>
-              <span className="wrap-break-word block text-sm leading-6 text-muted-foreground">
-                {resource.provider} • {resource.type} • {resource.language}
-              </span>
-            </span>
-            <ExternalLink className="mt-1 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-          </span>
-        </a>
-      ))}
+      {visibleResources.map((resource, resourceIndex) => {
+        const isFavorite = favoriteIds.has(resource.id)
+        const isStudied = studiedIds.has(resource.id)
+
+        return (
+          <div
+            key={`${resource.id}-${resourceIndex}`}
+            className={cn(
+              "group rounded-xl border border-border/70 bg-background/75 px-3 py-2 transition-colors hover:bg-muted",
+              isStudied ? "opacity-80" : "",
+            )}
+          >
+            <div className="flex min-w-0 items-start justify-between gap-2">
+              <a
+                href={resource.url}
+                target="_blank"
+                rel="noreferrer"
+                className="min-w-0 flex-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <span className="wrap-break-word block text-sm font-medium text-foreground group-hover:text-primary">
+                  {resource.title}
+                </span>
+                <span className="wrap-break-word block text-sm leading-6 text-muted-foreground">
+                  {resource.provider} • {resource.type} • {resource.language}
+                </span>
+              </a>
+
+              <div className="flex shrink-0 items-center gap-1">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  className={cn(isFavorite ? "text-primary" : "text-muted-foreground")}
+                  onClick={() => onToggleFavorite(topic.id, resource.id)}
+                  aria-pressed={isFavorite}
+                  aria-label={isFavorite ? "Remover dos favoritos" : "Favoritar recurso"}
+                  title={isFavorite ? "Remover dos favoritos" : "Favoritar recurso"}
+                >
+                  <Star className={cn("size-4", isFavorite ? "fill-current" : "")} aria-hidden="true" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  className={cn(isStudied ? "text-primary" : "text-muted-foreground")}
+                  onClick={() => onToggleStudied(topic.id, resource.id)}
+                  aria-pressed={isStudied}
+                  aria-label={isStudied ? "Marcar como não estudado" : "Marcar como estudado"}
+                  title={isStudied ? "Marcar como não estudado" : "Marcar como estudado"}
+                >
+                  <Check className="size-4" aria-hidden="true" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  className="text-muted-foreground hover:text-destructive"
+                  onClick={() => onDeleteResource(topic.id, resource.id, resource.title, topic.title)}
+                  aria-label="Excluir recurso da trilha"
+                  title="Excluir recurso da trilha"
+                >
+                  <Trash2 className="size-4" aria-hidden="true" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -161,10 +237,16 @@ function TopicDetails({
   topic,
   topicIndex,
   onSelectFocus,
+  onToggleResourceFavorite,
+  onToggleResourceStudied,
+  onDeleteResource,
 }: {
   topic: StudyTrailTopic | null
   topicIndex: number
   onSelectFocus: (topicId: string, focusId: string) => void
+  onToggleResourceFavorite: (topicId: string, resourceId: string) => void
+  onToggleResourceStudied: (topicId: string, resourceId: string) => void
+  onDeleteResource: (topicId: string, resourceId: string, resourceTitle: string, topicTitle: string) => void
 }) {
   if (!topic) {
     return (
@@ -202,6 +284,7 @@ function TopicDetails({
           </div>
         </div>
 
+
         {needsFocus ? (
           <div className="space-y-3 rounded-2xl border border-primary/20 bg-primary/10 p-4">
             <p className="wrap-break-word text-sm font-medium text-foreground">
@@ -238,12 +321,26 @@ function TopicDetails({
           <div className="space-y-5">
             <div className="space-y-2">
               <h4 className="text-base font-semibold text-foreground">Recursos gratuitos</h4>
-              <ResourceLinkList resources={resources} emptyMessage={emptyResourceMessage} />
+              <ResourceLinkList
+                resources={resources}
+                emptyMessage={emptyResourceMessage}
+                topic={topic}
+                onToggleFavorite={onToggleResourceFavorite}
+                onToggleStudied={onToggleResourceStudied}
+                onDeleteResource={onDeleteResource}
+              />
             </div>
 
             <div className="space-y-2">
               <h4 className="text-base font-semibold text-foreground">Vídeos e canais</h4>
-              <ResourceLinkList resources={videoResources} emptyMessage={emptyVideoMessage} />
+              <ResourceLinkList
+                resources={videoResources}
+                emptyMessage={emptyVideoMessage}
+                topic={topic}
+                onToggleFavorite={onToggleResourceFavorite}
+                onToggleStudied={onToggleResourceStudied}
+                onDeleteResource={onDeleteResource}
+              />
             </div>
           </div>
         </div>
@@ -373,19 +470,57 @@ export function TrailsView() {
     setSearchTerm("")
   }
 
-  const handleSelectTopicFocus = (topicId: string, focusId: string) => {
+  const updateActiveTrailTopic = (
+    topicId: string,
+    updater: (topic: StudyTrailTopic) => StudyTrailTopic,
+  ) => {
     if (!activeTrail) return
 
     const updatedTrail = {
       ...activeTrail,
-      topics: activeTrail.topics.map((topic) =>
-        topic.id === topicId ? applyStudyTopicFocus(topic, focusId) : topic,
-      ),
+      topics: activeTrail.topics.map((topic) => (topic.id === topicId ? updater(topic) : topic)),
     }
 
     saveMentorTrails([updatedTrail])
     setTrails([updatedTrail])
     setSelectedTopicId(topicId)
+  }
+
+  const handleSelectTopicFocus = (topicId: string, focusId: string) => {
+    updateActiveTrailTopic(topicId, (topic) => applyStudyTopicFocus(topic, focusId))
+  }
+
+  const handleToggleResourceFavorite = (topicId: string, resourceId: string) => {
+    updateActiveTrailTopic(topicId, (topic) => ({
+      ...topic,
+      favoriteResourceIds: toggleResourceId(topic.favoriteResourceIds, resourceId),
+      hiddenResourceIds: removeResourceId(topic.hiddenResourceIds, resourceId),
+    }))
+  }
+
+  const handleToggleResourceStudied = (topicId: string, resourceId: string) => {
+    updateActiveTrailTopic(topicId, (topic) => ({
+      ...topic,
+      studiedResourceIds: toggleResourceId(topic.studiedResourceIds, resourceId),
+      hiddenResourceIds: removeResourceId(topic.hiddenResourceIds, resourceId),
+    }))
+  }
+
+  const handleDeleteResource = (topicId: string, resourceId: string, resourceTitle: string, topicTitle: string) => {
+    const confirmed = window.confirm(
+      `Excluir o recurso "${resourceTitle}" da matéria "${topicTitle}"?`,
+    )
+
+    if (!confirmed) return
+
+    updateActiveTrailTopic(topicId, (topic) => ({
+      ...topic,
+      resources: topic.resources.filter((resource) => resource.id !== resourceId),
+      videoResources: (topic.videoResources ?? []).filter((resource) => resource.id !== resourceId),
+      hiddenResourceIds: removeResourceId(topic.hiddenResourceIds, resourceId),
+      favoriteResourceIds: removeResourceId(topic.favoriteResourceIds, resourceId),
+      studiedResourceIds: removeResourceId(topic.studiedResourceIds, resourceId),
+    }))
   }
 
   return (
@@ -412,7 +547,7 @@ export function TrailsView() {
                     Atualizar trilha
                   </Button>
                 ) : (
-                  <span className="flex min-h-10 flex-1 items-center rounded-xl border border-border/70 px-3 text-sm text-muted-foreground">
+                  <span className="flex min-h-10 flex-1 items-center px-1 text-sm text-muted-foreground">
                     Não há mudanças na rotina
                   </span>
                 )}
@@ -439,7 +574,14 @@ export function TrailsView() {
           </section>
 
           <section className="min-w-0" aria-label="Detalhes do tema">
-            <TopicDetails topic={selectedTopic} topicIndex={selectedTopicIndex} onSelectFocus={handleSelectTopicFocus} />
+            <TopicDetails
+              topic={selectedTopic}
+              topicIndex={selectedTopicIndex}
+              onSelectFocus={handleSelectTopicFocus}
+              onToggleResourceFavorite={handleToggleResourceFavorite}
+              onToggleResourceStudied={handleToggleResourceStudied}
+              onDeleteResource={handleDeleteResource}
+            />
           </section>
         </div>
       )}
