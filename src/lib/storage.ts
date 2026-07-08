@@ -18,7 +18,7 @@ import type {
   SoundPreference,
 } from "@/types/study"
 import type { Theme } from "@/types/theme"
-import type { MentorMessage } from "@/features/mentor/types"
+import type { MentorMessage, StudyTrail, StudyTopicFocusOption, FreeStudyResource, StudyResourceTopicKey } from "@/features/mentor/types"
 
 const ROUTINE_MODE_COMPAT: Record<string, RoutineMode> = {
   "sem-trabalho": "no-work",
@@ -75,6 +75,10 @@ function notifyMentorChatChanged(): void {
   dispatchStorageEvent(STORAGE_EVENTS.mentorChatChanged)
 }
 
+function notifyMentorTrailsChanged(): void {
+  dispatchStorageEvent(STORAGE_EVENTS.mentorTrailsChanged)
+}
+
 function notifyAppDataChanged(): void {
   dispatchStorageEvent(STORAGE_EVENTS.appDataChanged)
 }
@@ -85,6 +89,7 @@ function notifyAllDataChanged(): void {
   notifyRoutineChanged()
   notifyThemeChanged()
   notifyMentorChatChanged()
+  notifyMentorTrailsChanged()
   notifyAppDataChanged()
 }
 
@@ -386,6 +391,145 @@ function normalizeMentorChat(raw: unknown): MentorMessage[] {
     .filter((message): message is MentorMessage => message !== null)
 }
 
+function normalizeStudyResource(raw: unknown): FreeStudyResource | null {
+  if (!isObject(raw)) return null
+
+  const topics = Array.isArray(raw.topics)
+    ? raw.topics.filter((topic): topic is StudyResourceTopicKey => typeof topic === "string")
+    : []
+
+  return {
+    id: normalizeString(raw.id, "resource"),
+    title: normalizeString(raw.title, "Recurso de estudo"),
+    url: normalizeString(raw.url, "#"),
+    type:
+      raw.type === "documentacao" ||
+      raw.type === "curso" ||
+      raw.type === "video" ||
+      raw.type === "canal" ||
+      raw.type === "playlist" ||
+      raw.type === "plataforma" ||
+      raw.type === "roadmap" ||
+      raw.type === "pratica"
+        ? raw.type
+        : "curso",
+    provider: normalizeString(raw.provider, "Recurso gratuito"),
+    language: raw.language === "en" ? "en" : "pt-BR",
+    level:
+      raw.level === "iniciante" ||
+      raw.level === "iniciante-intermediario" ||
+      raw.level === "intermediario" ||
+      raw.level === "iniciante-avancado"
+        ? raw.level
+        : "iniciante-intermediario",
+    topics,
+    description: normalizeString(raw.description, "Recurso gratuito para apoiar seus estudos."),
+  }
+}
+
+function normalizeStudyTopicFocusOption(raw: unknown): StudyTopicFocusOption | null {
+  if (!isObject(raw)) return null
+
+  const resources = Array.isArray(raw.resources)
+    ? raw.resources.map(normalizeStudyResource).filter((resource): resource is FreeStudyResource => resource !== null)
+    : []
+  const videoResources = Array.isArray(raw.videoResources)
+    ? raw.videoResources.map(normalizeStudyResource).filter((resource): resource is FreeStudyResource => resource !== null)
+    : []
+
+  return {
+    id: normalizeString(raw.id, "focus"),
+    label: normalizeString(raw.label, "Foco"),
+    steps: Array.isArray(raw.steps)
+      ? raw.steps.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+      : [],
+    resources,
+    videoResources,
+  }
+}
+
+function normalizeStudyTrailTopic(raw: unknown, index: number): StudyTrail["topics"][number] | null {
+  if (!isObject(raw)) return null
+
+  const resources = Array.isArray(raw.resources)
+    ? raw.resources.map(normalizeStudyResource).filter((resource): resource is FreeStudyResource => resource !== null)
+    : []
+  const videoResources = Array.isArray(raw.videoResources)
+    ? raw.videoResources.map(normalizeStudyResource).filter((resource): resource is FreeStudyResource => resource !== null)
+    : []
+
+  return {
+    id: normalizeString(raw.id, `trail-topic-${index + 1}`),
+    title: normalizeString(raw.title, "Tema de estudo"),
+    description: normalizeString(raw.description, "Trilha criada a partir da sua rotina."),
+    sourceBlocks: Array.isArray(raw.sourceBlocks)
+      ? raw.sourceBlocks.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+      : [],
+    sourceDays: Array.isArray(raw.sourceDays)
+      ? raw.sourceDays.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+      : [],
+    occurrenceCount:
+      typeof raw.occurrenceCount === "number" && Number.isFinite(raw.occurrenceCount)
+        ? Math.max(1, Math.floor(raw.occurrenceCount))
+        : 1,
+    totalMinutes:
+      typeof raw.totalMinutes === "number" && Number.isFinite(raw.totalMinutes)
+        ? Math.max(0, Math.round(raw.totalMinutes))
+        : 0,
+    resources,
+    videoResources,
+    steps: Array.isArray(raw.steps)
+      ? raw.steps.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+      : [],
+    projectSuggestion: normalizeString(raw.projectSuggestion, "Crie uma entrega pequena para praticar este tema."),
+    isBroad: raw.isBroad === true,
+    focusOptions: Array.isArray(raw.focusOptions)
+      ? raw.focusOptions
+          .map(normalizeStudyTopicFocusOption)
+          .filter((focus): focus is StudyTopicFocusOption => focus !== null)
+      : [],
+    selectedFocusId: typeof raw.selectedFocusId === "string" ? raw.selectedFocusId : null,
+    selectedFocusLabel: typeof raw.selectedFocusLabel === "string" ? raw.selectedFocusLabel : null,
+  }
+}
+
+function normalizeStudyTrail(raw: unknown, index: number): StudyTrail | null {
+  if (!isObject(raw)) return null
+
+  const topics = Array.isArray(raw.topics)
+    ? raw.topics
+        .map((topic, topicIndex) => normalizeStudyTrailTopic(topic, topicIndex))
+        .filter((topic): topic is StudyTrail["topics"][number] => topic !== null)
+    : []
+
+  return {
+    id: normalizeString(raw.id, `study-trail-${index + 1}`),
+    title: normalizeString(raw.title, "Trilha de estudos"),
+    createdAt: normalizeString(raw.createdAt, new Date(0).toISOString()),
+    routineName: normalizeString(raw.routineName, "Rotina"),
+    summary: normalizeString(raw.summary, "Trilha criada a partir da rotina."),
+    topics,
+    mentorNotes: typeof raw.mentorNotes === "string" ? raw.mentorNotes : "",
+    providerMode:
+      raw.providerMode === "gemini" ||
+      raw.providerMode === "groq" ||
+      raw.providerMode === "openrouter" ||
+      raw.providerMode === "openai" ||
+      raw.providerMode === "mock"
+        ? raw.providerMode
+        : "mock",
+    routineSignature: typeof raw.routineSignature === "string" ? raw.routineSignature : undefined,
+  }
+}
+
+function normalizeStudyTrails(raw: unknown): StudyTrail[] {
+  if (!Array.isArray(raw)) return []
+
+  return raw
+    .map((trail, index) => normalizeStudyTrail(trail, index))
+    .filter((trail): trail is StudyTrail => trail !== null)
+}
+
 function isTheme(value: unknown): value is Theme {
   return value === "light" || value === "dark"
 }
@@ -482,6 +626,26 @@ export function clearMentorChat(): void {
   notifyMentorChatChanged()
 }
 
+export function loadMentorTrails(): StudyTrail[] {
+  return normalizeStudyTrails(readJson<unknown>(STORAGE_KEYS.mentorTrails, []))
+}
+
+export function saveMentorTrails(trails: StudyTrail[]): void {
+  writeJson(STORAGE_KEYS.mentorTrails, normalizeStudyTrails(trails))
+  notifyMentorTrailsChanged()
+}
+
+export function addMentorTrail(trail: StudyTrail): void {
+  const trails = loadMentorTrails()
+  saveMentorTrails([trail, ...trails].slice(0, 20))
+}
+
+export function clearMentorTrails(): void {
+  if (typeof window === "undefined") return
+  window.localStorage.removeItem(STORAGE_KEYS.mentorTrails)
+  notifyMentorTrailsChanged()
+}
+
 export interface RoutineOSBackup {
   app: "RoutineOS"
   schemaVersion: number
@@ -494,6 +658,7 @@ export interface RoutineOSBackup {
     theme: Theme | null
     onboardingCompleted: boolean
     mentorChat: MentorMessage[]
+    mentorTrails: StudyTrail[]
   }
 }
 
@@ -516,6 +681,7 @@ function normalizeBackup(raw: unknown): RoutineOSBackup | null {
       theme: isTheme(data.theme) ? data.theme : null,
       onboardingCompleted: data.onboardingCompleted === true,
       mentorChat: normalizeMentorChat(data.mentorChat),
+      mentorTrails: normalizeStudyTrails(data.mentorTrails),
     },
   }
 }
@@ -536,6 +702,7 @@ export function createRoutineOSBackup(): RoutineOSBackup {
       theme: isTheme(theme) ? theme : null,
       onboardingCompleted: hasCompletedOnboarding(),
       mentorChat: loadMentorChat(),
+      mentorTrails: loadMentorTrails(),
     },
   }
 }
@@ -549,6 +716,7 @@ export function importRoutineOSBackup(raw: unknown): RoutineOSBackup {
   writeJson(STORAGE_KEYS.settings, backup.data.settings)
   writeJson(STORAGE_KEYS.records, backup.data.records)
   writeJson(STORAGE_KEYS.mentorChat, backup.data.mentorChat)
+  writeJson(STORAGE_KEYS.mentorTrails, backup.data.mentorTrails)
 
   if (backup.data.routine) {
     writeJson(STORAGE_KEYS.routine, backup.data.routine)
@@ -590,6 +758,7 @@ export function resetStoredAppData(): void {
   window.localStorage.removeItem(STORAGE_KEYS.theme)
   window.localStorage.removeItem(STORAGE_KEYS.onboardingCompleted)
   window.localStorage.removeItem(STORAGE_KEYS.mentorChat)
+  window.localStorage.removeItem(STORAGE_KEYS.mentorTrails)
 
   notifyAllDataChanged()
 }

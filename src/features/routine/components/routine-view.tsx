@@ -6,12 +6,16 @@ import { Button } from "@/components/ui/button"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { PageHeading } from "@/components/shared/page-heading"
 import { StudyControl } from "@/features/study-session/components/study-control"
+import { StudyTopicDialog } from "@/features/trails/components/study-topic-dialog"
+import { createStudyTrailTopicFromTitle, findTrailTopicByTitle } from "@/features/mentor/utils/study-trail"
 import { useStudySession } from "@/features/study-session/hooks/use-study-session"
 import { RoutineBlockRow } from "@/features/routine/components/routine-block-row"
 import { useRoutineSchedule } from "@/features/routine/hooks/use-routine-schedule"
 import { getRoutineDayBlocksForDateKey } from "@/features/routine/utils/routine-domain"
 import { cn } from "@/lib/utils"
+import { loadMentorTrails } from "@/lib/storage"
 import { getMonthLabel, getTodayDateKey } from "@/utils/date"
+import type { RoutineBlock } from "@/types/study"
 
 function getSelectedDateRelation(dateKey: string): "past" | "today" | "future" {
   const todayKey = getTodayDateKey()
@@ -32,6 +36,7 @@ export function RoutineView() {
     goToNextWeek,
   } = useRoutineSchedule()
   const [autoAdvance, setAutoAdvance] = useState(false)
+  const [studyTopic, setStudyTopic] = useState<ReturnType<typeof createStudyTrailTopicFromTitle> | null>(null)
   const monthLabel = getMonthLabel(activeDate.getFullYear(), activeDate.getMonth())
   const hasRoutine = activeBlocks.length > 0
   const selectedDateRelation = getSelectedDateRelation(activeDateKey)
@@ -43,6 +48,11 @@ export function RoutineView() {
     autoAdvance,
   })
   const todayKey = getTodayDateKey()
+
+  const handleOpenStudy = (block: RoutineBlock) => {
+    const savedTopic = findTrailTopicByTitle(loadMentorTrails(), block.title)
+    setStudyTopic(savedTopic ?? createStudyTrailTopicFromTitle(block.title))
+  }
 
   useEffect(() => {
     setAutoAdvance(false)
@@ -126,6 +136,7 @@ export function RoutineView() {
                         isCurrent={
                           day.dateKey === activeDateKey && index === highlightedBlockIndex
                         }
+                        onOpenStudy={handleOpenStudy}
                       />
                     ))
                   ) : (
@@ -151,6 +162,13 @@ export function RoutineView() {
           />
         </div>
       </div>
+      <StudyTopicDialog
+        open={studyTopic !== null}
+        topic={studyTopic}
+        onOpenChange={(open) => {
+          if (!open) setStudyTopic(null)
+        }}
+      />
     </div>
   )
 }

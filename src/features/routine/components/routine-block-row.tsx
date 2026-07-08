@@ -1,4 +1,5 @@
-import { ArrowRight } from "lucide-react"
+import { BookOpen } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import { BLOCK_TYPE_META } from "@/constants/routine"
 import { cn } from "@/lib/utils"
 import type { RoutineBlock } from "@/types/study"
@@ -6,10 +7,16 @@ import type { RoutineBlock } from "@/types/study"
 interface RoutineBlockRowProps {
   block: RoutineBlock
   isCurrent: boolean
+  onOpenStudy?: (block: RoutineBlock) => void
 }
 
-export function RoutineBlockRow({ block, isCurrent }: RoutineBlockRowProps) {
+function isStudyActionBlock(block: RoutineBlock): boolean {
+  return block.type === "study" || block.type === "project" || block.type === "other"
+}
+
+export function RoutineBlockRow({ block, isCurrent, onOpenStudy }: RoutineBlockRowProps) {
   const meta = BLOCK_TYPE_META[block.type]
+  const canOpenStudy = isCurrent && isStudyActionBlock(block) && typeof onOpenStudy === "function"
 
   return (
     <div
@@ -29,21 +36,20 @@ export function RoutineBlockRow({ block, isCurrent }: RoutineBlockRowProps) {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <span className="wrap-break-word text-sm font-medium text-foreground">{block.title}</span>
-        <span
-          className={cn(
-            "mt-1 inline-flex w-fit max-w-full items-center gap-1.5 rounded-full border px-2 py-0.5 text-sm font-medium whitespace-normal",
-            meta.badge,
-          )}
-        >
-          <span className={cn("size-1.5 rounded-full", meta.dot)} />
-          {meta.label}
-        </span>
       </div>
 
-      {isCurrent ? (
-        <span className="hidden shrink-0 items-center gap-1 rounded-full bg-primary px-2.5 py-1 text-sm font-medium text-primary-foreground sm:inline-flex">
-          Agora <ArrowRight className="size-3" />
-        </span>
+      {canOpenStudy ? (
+        <Button
+          type="button"
+          size="sm"
+          className="min-h-9 shrink-0"
+          onClick={() => onOpenStudy?.(block)}
+          aria-label={`Ver estudos de ${block.title}`}
+        >
+          <BookOpen className="size-4" aria-hidden="true" />
+          <span className="hidden sm:inline">Ver estudos</span>
+          <span className="sm:hidden">Ver</span>
+        </Button>
       ) : null}
     </div>
   )

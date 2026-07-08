@@ -13,18 +13,20 @@ import {
   loadAllRecords,
   loadSettings,
 } from "@/lib/storage"
-import { getCurrentMonthMeta, getTodayDateKey } from "@/utils/date"
+import { dateKeyFromParts, getCurrentMonthMeta, getTodayDateKey } from "@/utils/date"
 import type {
   MentorContext,
   MentorContextBlock,
   MentorContextDayRoutine,
   MentorContextMonthRecord,
+  MentorContextMonthTopic,
 } from "@/features/mentor/types"
 import type { ViewKey } from "@/types/navigation"
 import type { Routine } from "@/types/study"
 import type { Theme } from "@/types/theme"
 
 const MAX_BLOCKS_PER_DAY = 24
+const STUDY_BLOCK_TYPES = ["study", "project", "other"] as const
 
 function minutesFromSeconds(seconds: number): number {
   return Math.round(seconds / 60)
@@ -60,6 +62,73 @@ function summarizeDayRoutine(routine: Routine, dateKey: string): MentorContextDa
     hasRoutine: blocks.length > 0,
     plannedMinutes: blocks.reduce((total, block) => total + block.durationMinutes, 0),
     blocks,
+  }
+}
+
+
+function normalizeTopicTitle(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9+#.\s-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
+function createTopicId(title: string): string {
+  return normalizeTopicTitle(title).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "tema"
+}
+
+function isStudyBlock(block: MentorContextBlock): boolean {
+  return STUDY_BLOCK_TYPES.includes(block.type as (typeof STUDY_BLOCK_TYPES)[number])
+}
+
+function getMonthDateKeys(year: number, month: number): string[] {
+  const lastDay = new Date(year, month + 1, 0).getDate()
+  return Array.from({ length: lastDay }, (_, index) => dateKeyFromParts(year, month, index + 1))
+}
+
+function summarizeMonthRoutine(routine: Routine, year: number, month: number): MentorContext["monthRoutine"] {
+  const dateKeys = getMonthDateKeys(year, month)
+  const groupedTopics = new Map<string, MentorContextMonthTopic>()
+  let studyBlockCount = 0
+
+  for (const dateKey of dateKeys) {
+    const blocks = summarizeBlocks(routine, dateKey).filter(isStudyBlock)
+
+    for (const block of blocks) {
+      const title = block.title.trim()
+      if (!title) continue
+
+      studyBlockCount += 1
+      const id = createTopicId(title)
+      const current = groupedTopics.get(id)
+
+      if (current) {
+        if (!current.sourceBlocks.includes(title)) current.sourceBlocks.push(title)
+        if (!current.days.includes(dateKey)) current.days.push(dateKey)
+        current.occurrenceCount += 1
+        current.totalMinutes += block.durationMinutes
+      } else {
+        groupedTopics.set(id, {
+          id,
+          title,
+          sourceBlocks: [title],
+          days: [dateKey],
+          occurrenceCount: 1,
+          totalMinutes: block.durationMinutes,
+        })
+      }
+    }
+  }
+
+  return {
+    year,
+    month,
+    daysAnalyzed: dateKeys.length,
+    studyBlockCount,
+    topics: Array.from(groupedTopics.values()),
   }
 }
 
@@ -109,6 +178,7 @@ export function buildMentorContext({ currentView }: { currentView: ViewKey }): M
       monthlyGoalMinutes: Math.round(settings.monthlyGoalHours * 60),
     },
     monthHistory,
+    monthRoutine: summarizeMonthRoutine(routine, year, month),
     settings: {
       routineMode: settings.routineMode,
       dailyGoalHours: settings.dailyGoalHours,

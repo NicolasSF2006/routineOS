@@ -36,6 +36,15 @@ export interface MentorContextMonthRecord {
   canceledAt: string | null
 }
 
+export interface MentorContextMonthTopic {
+  id: string
+  title: string
+  sourceBlocks: string[]
+  days: string[]
+  occurrenceCount: number
+  totalMinutes: number
+}
+
 export interface MentorContext {
   currentView: ViewKey
   today: string
@@ -57,6 +66,13 @@ export interface MentorContext {
     monthlyGoalMinutes: number
   }
   monthHistory: MentorContextMonthRecord[]
+  monthRoutine: {
+    year: number
+    month: number
+    daysAnalyzed: number
+    studyBlockCount: number
+    topics: MentorContextMonthTopic[]
+  }
   settings: {
     routineMode: RoutineMode
     dailyGoalHours: number
@@ -72,6 +88,87 @@ export interface MentorContext {
 export type MentorApiResponseMode = "gemini" | "groq" | "openrouter" | "openai" | "mock"
 
 export interface MentorApiResponse {
+  reply: string
+  mode: MentorApiResponseMode
+}
+
+export type StudyResourceType = "documentacao" | "curso" | "video" | "canal" | "playlist" | "plataforma" | "roadmap" | "pratica"
+
+export type StudyResourceLevel = "iniciante" | "iniciante-intermediario" | "intermediario" | "iniciante-avancado"
+
+export type StudyResourceTopicKey =
+  | "algorithms"
+  | "backend"
+  | "css"
+  | "database"
+  | "english"
+  | "mandarin"
+  | "spanish"
+  | "frontend"
+  | "git"
+  | "html"
+  | "javascript"
+  | "linux"
+  | "node"
+  | "portuguese"
+  | "python"
+  | "react"
+  | "sql"
+  | "typescript"
+  | "ux"
+
+export interface FreeStudyResource {
+  id: string
+  title: string
+  url: string
+  type: StudyResourceType
+  provider: string
+  language: "pt-BR" | "en"
+  level: StudyResourceLevel
+  topics: StudyResourceTopicKey[]
+  description: string
+}
+
+export interface StudyTopicFocusOption {
+  id: string
+  label: string
+  steps: string[]
+  resources: FreeStudyResource[]
+  videoResources: FreeStudyResource[]
+}
+
+export interface StudyTrailTopic {
+  id: string
+  title: string
+  description: string
+  sourceBlocks: string[]
+  sourceDays?: string[]
+  occurrenceCount?: number
+  totalMinutes?: number
+  resources: FreeStudyResource[]
+  videoResources: FreeStudyResource[]
+  steps: string[]
+  projectSuggestion: string
+  isBroad?: boolean
+  focusOptions?: StudyTopicFocusOption[]
+  selectedFocusId?: string | null
+  selectedFocusLabel?: string | null
+}
+
+export interface StudyTrail {
+  id: string
+  title: string
+  createdAt: string
+  routineName: string
+  summary: string
+  topics: StudyTrailTopic[]
+  mentorNotes: string
+  providerMode: MentorApiResponseMode
+  routineSignature?: string
+}
+
+export interface StudyTrailApiResponse {
+  trail: StudyTrail
   reply: string
   mode: MentorApiResponseMode
 }

@@ -5,6 +5,7 @@ import { AppHeader } from "@/components/layout/app-header"
 import { CalendarioView } from "@/features/calendar/components/calendar-view"
 import { MentorWidget } from "@/features/mentor/components/mentor-widget"
 import { RoutineView } from "@/features/routine/components/routine-view"
+import { TrailsView } from "@/features/trails/components/trails-view"
 import { SettingsView } from "@/features/settings/components/settings-view"
 import { RoutineBuilderView } from "@/features/routine-builder/components/routine-builder-view"
 import { STORAGE_EVENTS, STORAGE_KEYS } from "@/constants/storage"
@@ -12,7 +13,7 @@ import { OnboardingDialog } from "@/features/onboarding/components/onboarding-di
 import { completeOnboarding, hasCompletedOnboarding } from "@/lib/storage"
 import type { ViewKey } from "@/types/navigation"
 
-const VIEW_KEYS: ViewKey[] = ["rotina", "calendario", "configuracoes", "configurar-rotina"]
+const VIEW_KEYS: ViewKey[] = ["rotina", "calendario", "trilhas", "configuracoes", "configurar-rotina"]
 
 function isViewKey(value: string | null): value is ViewKey {
   return value !== null && VIEW_KEYS.includes(value as ViewKey)
@@ -65,6 +66,7 @@ export default function Page() {
       >
         {view === "rotina" ? <RoutineView /> : null}
         {view === "calendario" ? <CalendarioView /> : null}
+        {view === "trilhas" ? <TrailsView /> : null}
         {view === "configuracoes" ? (
           <SettingsView onNavigate={navigateToView} onOpenOnboarding={() => setIsOnboardingOpen(true)} />
         ) : null}

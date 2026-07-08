@@ -1,25 +1,20 @@
 import { NextResponse } from "next/server"
 import { createMentorReply } from "@/features/mentor/server/mentor-provider-router"
-import type { MentorContext, MentorMessage } from "@/features/mentor/types"
+import {
+  createStudyTrailFromContext,
+  createLocalStudyTrailReply,
+  createStudyTrailPrompt,
+} from "@/features/mentor/utils/study-trail"
+import type { MentorContext, MentorMessage, StudyTrailApiResponse } from "@/features/mentor/types"
 
 export const dynamic = "force-dynamic"
 
-const MAX_MESSAGE_LENGTH = 4_000
-const MAX_HISTORY_ITEMS = 20
-const MAX_HISTORY_CONTENT_LENGTH = 2_000
+const MAX_HISTORY_ITEMS = 12
+const MAX_HISTORY_CONTENT_LENGTH = 1_500
 const MAX_CONTEXT_LENGTH = 40_000
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
-}
-
-function sanitizeMessage(value: unknown): string | null {
-  if (typeof value !== "string") return null
-
-  const message = value.trim()
-  if (message.length === 0) return null
-
-  return message.slice(0, MAX_MESSAGE_LENGTH)
 }
 
 function sanitizeHistory(rawHistory: unknown): MentorMessage[] {
@@ -33,9 +28,10 @@ function sanitizeHistory(rawHistory: unknown): MentorMessage[] {
       if (typeof message.content !== "string" || message.content.trim().length === 0) return null
 
       return {
-        id: typeof message.id === "string" && message.id.trim().length > 0
-          ? message.id
-          : `history-${index + 1}`,
+        id:
+          typeof message.id === "string" && message.id.trim().length > 0
+            ? message.id
+            : `history-${index + 1}`,
         role: message.role,
         content: message.content.trim().slice(0, MAX_HISTORY_CONTENT_LENGTH),
         createdAt: typeof message.createdAt === "string" ? message.createdAt : new Date(0).toISOString(),
@@ -67,29 +63,43 @@ export async function POST(request: Request) {
   try {
     body = await request.json()
   } catch {
-    return jsonError("Envie uma mensagem válida para o Mentor IA.", 400)
+    return jsonError("Não foi possível gerar a trilha agora.", 400)
   }
 
   if (!isObject(body)) {
-    return jsonError("Envie uma mensagem válida para o Mentor IA.", 400)
+    return jsonError("Não foi possível gerar a trilha agora.", 400)
   }
 
-  const message = sanitizeMessage(body.message)
   const context = sanitizeContext(body.context)
 
-  if (!message) {
-    return jsonError("A mensagem não pode ficar vazia.", 400)
+  if (!context) {
+    return jsonError("Não foi possível ler o contexto da rotina para montar a trilha.", 400)
   }
 
-  if (!context) {
-    return jsonError("Não foi possível ler o contexto do RoutineOS.", 400)
+  const trail = createStudyTrailFromContext(context)
+
+  if (trail.topics.length === 0) {
+    return jsonError("Crie pelo menos um bloco de estudo na rotina antes de gerar uma trilha.", 400)
   }
 
   const response = await createMentorReply({
-    message,
+    message: createStudyTrailPrompt(trail),
     history: sanitizeHistory(body.history),
     context,
   })
 
-  return NextResponse.json(response)
+  const reply = response.mode === "mock" ? createLocalStudyTrailReply(trail) : response.reply
+  const trailWithMentorNotes = {
+    ...trail,
+    mentorNotes: reply,
+    providerMode: response.mode,
+  }
+
+  const payload: StudyTrailApiResponse = {
+    trail: trailWithMentorNotes,
+    reply,
+    mode: response.mode,
+  }
+
+  return NextResponse.json(payload)
 }
