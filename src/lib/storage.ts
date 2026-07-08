@@ -21,6 +21,7 @@ import type { Theme } from "@/types/theme"
 import type {
   MentorMessage,
   StudyTrail,
+  StudyTrailUserCourse,
   StudyTopicFocusOption,
   FreeStudyResource,
   StudyResourceTopicKey,
@@ -477,6 +478,23 @@ function normalizeStudyTopicFocusOption(raw: unknown): StudyTopicFocusOption | n
   }
 }
 
+function normalizeStudyTrailUserCourse(raw: unknown, index: number): StudyTrailUserCourse | null {
+  if (!isObject(raw)) return null
+
+  const title = typeof raw.title === "string" ? raw.title.trim() : ""
+  const url = typeof raw.url === "string" ? raw.url.trim() : ""
+
+  if (!title || !url) return null
+
+  return {
+    id: normalizeString(raw.id, `user-course-${index + 1}`),
+    title,
+    url,
+    platform: normalizeString(raw.platform, url),
+    createdAt: normalizeString(raw.createdAt, new Date(0).toISOString()),
+  }
+}
+
 function normalizeStudyTrailTopic(raw: unknown, index: number): StudyTrail["topics"][number] | null {
   if (!isObject(raw)) return null
 
@@ -485,6 +503,11 @@ function normalizeStudyTrailTopic(raw: unknown, index: number): StudyTrail["topi
     : []
   const videoResources = Array.isArray(raw.videoResources)
     ? raw.videoResources.map(normalizeStudyResource).filter((resource): resource is FreeStudyResource => resource !== null)
+    : []
+  const userCourses = Array.isArray(raw.userCourses)
+    ? raw.userCourses
+        .map(normalizeStudyTrailUserCourse)
+        .filter((course): course is StudyTrailUserCourse => course !== null)
     : []
 
   return {
@@ -507,6 +530,7 @@ function normalizeStudyTrailTopic(raw: unknown, index: number): StudyTrail["topi
         : 0,
     resources,
     videoResources,
+    userCourses,
     steps: Array.isArray(raw.steps)
       ? raw.steps.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
       : [],

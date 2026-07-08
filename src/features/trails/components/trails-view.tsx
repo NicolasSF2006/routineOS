@@ -1,11 +1,18 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { FormEvent, useEffect, useMemo, useState } from "react"
 import { BookOpen, Check, Loader2, Plus, Search, Star, Trash2 } from "lucide-react"
 import { PageHeading } from "@/components/shared/page-heading"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { STORAGE_EVENTS } from "@/constants/storage"
 import { buildMentorContext } from "@/features/mentor/utils/mentor-context"
 import {
@@ -14,7 +21,12 @@ import {
 } from "@/features/mentor/utils/study-trail"
 import { cn } from "@/lib/utils"
 import { loadMentorTrails, saveMentorTrails } from "@/lib/storage"
-import type { StudyTrail, StudyTrailApiResponse, StudyTrailTopic } from "@/features/mentor/types"
+import type {
+  StudyTrail,
+  StudyTrailApiResponse,
+  StudyTrailTopic,
+  StudyTrailUserCourse,
+} from "@/features/mentor/types"
 
 function toggleResourceId(resourceIds: string[] | undefined, resourceId: string): string[] {
   const currentIds = new Set(resourceIds ?? [])
@@ -45,6 +57,24 @@ function formatTopicMeta(topic: StudyTrailTopic): string {
   }
 
   return parts.join(" • ")
+}
+
+function createCourseId(): string {
+  return `user-course-${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
+function normalizeCourseUrl(value: string): string {
+  const trimmed = value.trim()
+  if (!trimmed) return ""
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`
+}
+
+function getUrlFallbackLabel(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "")
+  } catch {
+    return url
+  }
 }
 
 function TrailsEmptyState({ onGenerate, isGenerating }: { onGenerate: () => void; isGenerating: boolean }) {
@@ -233,6 +263,209 @@ function ResourceLinkList({
   )
 }
 
+function AddCourseDialog({
+  topic,
+  onAddCourse,
+}: {
+  topic: StudyTrailTopic
+  onAddCourse: (topicId: string, course: StudyTrailUserCourse) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [title, setTitle] = useState("")
+  const [url, setUrl] = useState("")
+  const [error, setError] = useState<string | null>(null)
+  const [isSaving, setIsSaving] = useState(false)
+
+  const resetForm = () => {
+    setTitle("")
+    setUrl("")
+    setError(null)
+    setIsSaving(false)
+  }
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    setOpen(nextOpen)
+    if (!nextOpen) resetForm()
+  }
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (isSaving) return
+
+    const trimmedTitle = title.trim()
+    const normalizedUrl = normalizeCourseUrl(url)
+
+    if (!trimmedTitle) {
+      setError("Informe o nome do curso.")
+      return
+    }
+
+    let parsedUrl: URL
+    try {
+      parsedUrl = new URL(normalizedUrl)
+    } catch {
+      setError("Informe uma URL válida.")
+      return
+    }
+
+    if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
+      setError("Use uma URL com http ou https.")
+      return
+    }
+
+    setIsSaving(true)
+    setError(null)
+
+    try {
+      const response = await fetch("/api/resource-metadata", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: normalizedUrl }),
+      })
+      const payload = (await response.json().catch(() => null)) as { platform?: string } | null
+      const platform = typeof payload?.platform === "string" && payload.platform.trim().length > 0
+        ? payload.platform.trim()
+        : getUrlFallbackLabel(normalizedUrl)
+
+      onAddCourse(topic.id, {
+        id: createCourseId(),
+        title: trimmedTitle,
+        url: normalizedUrl,
+        platform,
+        createdAt: new Date().toISOString(),
+      })
+      handleOpenChange(false)
+    } catch {
+      onAddCourse(topic.id, {
+        id: createCourseId(),
+        title: trimmedTitle,
+        url: normalizedUrl,
+        platform: getUrlFallbackLabel(normalizedUrl),
+        createdAt: new Date().toISOString(),
+      })
+      handleOpenChange(false)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <Button type="button" variant="outline" className="min-h-10 w-full" onClick={() => setOpen(true)}>
+        <Plus className="size-4" aria-hidden="true" />
+        Adicionar curso
+      </Button>
+
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader className="pr-8">
+          <DialogTitle className="wrap-break-word text-xl">Adicionar curso em {topic.title}</DialogTitle>
+        </DialogHeader>
+
+        <form className="space-y-4" onSubmit={handleSubmit}>
+          <div className="space-y-2">
+            <Label htmlFor={`course-title-${topic.id}`}>Nome do curso</Label>
+            <Input
+              id={`course-title-${topic.id}`}
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              placeholder="Ex: Curso de Linux para iniciantes"
+              className="h-11"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor={`course-url-${topic.id}`}>URL</Label>
+            <Input
+              id={`course-url-${topic.id}`}
+              value={url}
+              onChange={(event) => setUrl(event.target.value)}
+              placeholder="https://..."
+              className="h-11"
+            />
+          </div>
+
+          {error ? <p className="wrap-break-word text-sm text-destructive">{error}</p> : null}
+
+          <div className="flex justify-end pt-1">
+            <Button type="submit" disabled={isSaving} className="min-h-10">
+              {isSaving ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : null}
+              Salvar
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function UserCourseList({
+  topic,
+  onAddCourse,
+  onDeleteCourse,
+}: {
+  topic: StudyTrailTopic
+  onAddCourse: (topicId: string, course: StudyTrailUserCourse) => void
+  onDeleteCourse: (topicId: string, courseId: string, courseTitle: string, topicTitle: string) => void
+}) {
+  const courses = topic.userCourses ?? []
+
+  return (
+    <div className="space-y-3">
+      <div className="space-y-1">
+        <h4 className="text-base font-semibold text-foreground">Meus cursos</h4>
+        <p className="wrap-break-word text-sm leading-6 text-muted-foreground">
+          Cursos adicionados por você para esta matéria.
+        </p>
+      </div>
+
+      <AddCourseDialog topic={topic} onAddCourse={onAddCourse} />
+
+      {courses.length > 0 ? (
+        <div className="grid gap-2">
+          {courses.map((course) => (
+            <div
+              key={course.id}
+              className="group rounded-xl border border-border/70 bg-background/75 px-3 py-2 transition-colors hover:bg-muted"
+            >
+              <div className="flex min-w-0 items-start justify-between gap-2">
+                <a
+                  href={course.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="min-w-0 flex-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <span className="wrap-break-word block text-sm font-medium text-foreground group-hover:text-primary">
+                    {course.title}
+                  </span>
+                  <span className="wrap-break-word block text-sm leading-6 text-muted-foreground">
+                    {course.platform || getUrlFallbackLabel(course.url)}
+                  </span>
+                </a>
+
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  className="shrink-0 text-muted-foreground hover:text-destructive"
+                  onClick={() => onDeleteCourse(topic.id, course.id, course.title, topic.title)}
+                  aria-label="Excluir curso"
+                  title="Excluir curso"
+                >
+                  <Trash2 className="size-4" aria-hidden="true" />
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="wrap-break-word rounded-xl border border-dashed border-border/70 px-3 py-3 text-sm leading-6 text-muted-foreground">
+          Você ainda não adicionou cursos para este tema.
+        </p>
+      )}
+    </div>
+  )
+}
+
 function TopicDetails({
   topic,
   topicIndex,
@@ -240,6 +473,8 @@ function TopicDetails({
   onToggleResourceFavorite,
   onToggleResourceStudied,
   onDeleteResource,
+  onAddCourse,
+  onDeleteCourse,
 }: {
   topic: StudyTrailTopic | null
   topicIndex: number
@@ -247,6 +482,8 @@ function TopicDetails({
   onToggleResourceFavorite: (topicId: string, resourceId: string) => void
   onToggleResourceStudied: (topicId: string, resourceId: string) => void
   onDeleteResource: (topicId: string, resourceId: string, resourceTitle: string, topicTitle: string) => void
+  onAddCourse: (topicId: string, course: StudyTrailUserCourse) => void
+  onDeleteCourse: (topicId: string, courseId: string, courseTitle: string, topicTitle: string) => void
 }) {
   if (!topic) {
     return (
@@ -284,7 +521,6 @@ function TopicDetails({
           </div>
         </div>
 
-
         {needsFocus ? (
           <div className="space-y-3 rounded-2xl border border-primary/20 bg-primary/10 p-4">
             <p className="wrap-break-word text-sm font-medium text-foreground">
@@ -306,43 +542,49 @@ function TopicDetails({
           </div>
         ) : null}
 
-        <div className="grid gap-5 lg:grid-cols-[1fr_1fr]">
-          <div className="space-y-2">
-            <h4 className="text-base font-semibold text-foreground">Como estudar</h4>
-            <ul className="space-y-2 pl-5 text-sm leading-6 text-muted-foreground">
-              {topic.steps.map((step, stepIndex) => (
-                <li key={`${topic.id}-step-${stepIndex}`} className="wrap-break-word list-disc">
-                  {step}
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <div className="space-y-5">
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(18rem,0.8fr)]">
+          <div className="space-y-6">
             <div className="space-y-2">
-              <h4 className="text-base font-semibold text-foreground">Recursos gratuitos</h4>
-              <ResourceLinkList
-                resources={resources}
-                emptyMessage={emptyResourceMessage}
-                topic={topic}
-                onToggleFavorite={onToggleResourceFavorite}
-                onToggleStudied={onToggleResourceStudied}
-                onDeleteResource={onDeleteResource}
-              />
+              <h4 className="text-base font-semibold text-foreground">Como estudar</h4>
+              <ul className="space-y-2 pl-5 text-sm leading-6 text-muted-foreground">
+                {topic.steps.map((step, stepIndex) => (
+                  <li key={`${topic.id}-step-${stepIndex}`} className="wrap-break-word list-disc">
+                    {step}
+                  </li>
+                ))}
+              </ul>
             </div>
 
-            <div className="space-y-2">
-              <h4 className="text-base font-semibold text-foreground">Vídeos e canais</h4>
-              <ResourceLinkList
-                resources={videoResources}
-                emptyMessage={emptyVideoMessage}
-                topic={topic}
-                onToggleFavorite={onToggleResourceFavorite}
-                onToggleStudied={onToggleResourceStudied}
-                onDeleteResource={onDeleteResource}
-              />
+            <div className="space-y-5">
+              <h4 className="text-base font-semibold text-foreground">Recomendação do MentorIA</h4>
+
+              <div className="space-y-2">
+                <h5 className="text-base font-semibold text-foreground">Recursos gratuitos</h5>
+                <ResourceLinkList
+                  resources={resources}
+                  emptyMessage={emptyResourceMessage}
+                  topic={topic}
+                  onToggleFavorite={onToggleResourceFavorite}
+                  onToggleStudied={onToggleResourceStudied}
+                  onDeleteResource={onDeleteResource}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <h5 className="text-base font-semibold text-foreground">Vídeos e canais</h5>
+                <ResourceLinkList
+                  resources={videoResources}
+                  emptyMessage={emptyVideoMessage}
+                  topic={topic}
+                  onToggleFavorite={onToggleResourceFavorite}
+                  onToggleStudied={onToggleResourceStudied}
+                  onDeleteResource={onDeleteResource}
+                />
+              </div>
             </div>
           </div>
+
+          <UserCourseList topic={topic} onAddCourse={onAddCourse} onDeleteCourse={onDeleteCourse} />
         </div>
       </CardContent>
     </Card>
@@ -523,6 +765,24 @@ export function TrailsView() {
     }))
   }
 
+  const handleAddCourse = (topicId: string, course: StudyTrailUserCourse) => {
+    updateActiveTrailTopic(topicId, (topic) => ({
+      ...topic,
+      userCourses: [course, ...(topic.userCourses ?? [])],
+    }))
+  }
+
+  const handleDeleteCourse = (topicId: string, courseId: string, courseTitle: string, topicTitle: string) => {
+    const confirmed = window.confirm(`Excluir o curso "${courseTitle}" da matéria "${topicTitle}"?`)
+
+    if (!confirmed) return
+
+    updateActiveTrailTopic(topicId, (topic) => ({
+      ...topic,
+      userCourses: (topic.userCourses ?? []).filter((course) => course.id !== courseId),
+    }))
+  }
+
   return (
     <div className="flex w-full max-w-full flex-col gap-6 overflow-x-hidden">
       <PageHeading title="Trilhas de estudo" align="center" />
@@ -581,6 +841,8 @@ export function TrailsView() {
               onToggleResourceFavorite={handleToggleResourceFavorite}
               onToggleResourceStudied={handleToggleResourceStudied}
               onDeleteResource={handleDeleteResource}
+              onAddCourse={handleAddCourse}
+              onDeleteCourse={handleDeleteCourse}
             />
           </section>
         </div>

@@ -203,6 +203,12 @@ function summarizeStudyTrail(): MentorContext["studyTrail"] {
         hiddenResources: resources
           .filter(({ resource }) => hiddenIds.has(resource.id))
           .map(({ resource, section }) => summarizeTrailResource(resource, section)),
+        userCourses: (topic.userCourses ?? []).map((course) => ({
+          id: course.id,
+          title: course.title,
+          url: course.url,
+          platform: course.platform,
+        })),
       }
     }),
   }

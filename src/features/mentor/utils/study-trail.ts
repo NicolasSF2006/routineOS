@@ -649,6 +649,7 @@ function createTopicFromSource(source: StudyBlockTopicSource): StudyTrailTopic {
     totalMinutes: source.totalMinutes,
     resources,
     videoResources: isBroad ? [] : pickVideoResources(topicKeys, resources),
+    userCourses: [],
     steps: isBroad ? broadDefinition.introSteps : createDefaultSteps(source.title),
     projectSuggestion: createProjectSuggestion(source.title),
     isBroad,

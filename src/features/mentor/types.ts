@@ -55,6 +55,13 @@ export interface MentorContextTrailResourceSignal {
   section: "resource" | "video"
 }
 
+export interface MentorContextTrailUserCourseSignal {
+  id: string
+  title: string
+  url: string
+  platform: string
+}
+
 export interface MentorContextTrailTopicSignal {
   id: string
   title: string
@@ -63,6 +70,7 @@ export interface MentorContextTrailTopicSignal {
   favoriteResources: MentorContextTrailResourceSignal[]
   studiedResources: MentorContextTrailResourceSignal[]
   hiddenResources: MentorContextTrailResourceSignal[]
+  userCourses: MentorContextTrailUserCourseSignal[]
 }
 
 export interface MentorContextTrailSignal {
@@ -165,6 +173,14 @@ export interface StudyTopicFocusOption {
   videoResources: FreeStudyResource[]
 }
 
+export interface StudyTrailUserCourse {
+  id: string
+  title: string
+  url: string
+  platform: string
+  createdAt: string
+}
+
 export interface StudyTrailTopic {
   id: string
   title: string
@@ -175,6 +191,7 @@ export interface StudyTrailTopic {
   totalMinutes?: number
   resources: FreeStudyResource[]
   videoResources: FreeStudyResource[]
+  userCourses?: StudyTrailUserCourse[]
   steps: string[]
   projectSuggestion: string
   isBroad?: boolean
