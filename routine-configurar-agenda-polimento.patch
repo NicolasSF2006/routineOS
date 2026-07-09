@@ -1,0 +1,209 @@
+diff --git a/src/features/routine-builder/components/routine-builder-view.tsx b/src/features/routine-builder/components/routine-builder-view.tsx
+index ee8dbd5..4c104c3 100644
+--- a/src/features/routine-builder/components/routine-builder-view.tsx
++++ b/src/features/routine-builder/components/routine-builder-view.tsx
+@@ -146,9 +146,9 @@ function createBlockFromEditing(editing: EditingState): RoutineBlock {
+   }
+ }
+ 
+-const HOUR_ROW_HEIGHT = 120
+-const MIN_VISIBLE_BLOCK_HEIGHT = 30
+-const BLOCK_LAYOUT_GAP = 8
++const HOUR_ROW_HEIGHT = 128
++const MIN_VISIBLE_BLOCK_HEIGHT = 22
++const BLOCK_LAYOUT_GAP = 4
+ const MIN_TIMELINE_MINUTES = 8 * 60
+ 
+ interface RoutineBlockLayout {
+@@ -195,7 +195,7 @@ function getTimelineRange(week: RoutineWeek, fallbackStartTime: string) {
+     ? Math.max(...allBlocks.map((block) => getBlockEndMinutes(block, fallbackStartMinutes)))
+     : fallbackStartMinutes + MIN_TIMELINE_MINUTES
+ 
+-  const startMinutes = Math.max(0, Math.floor(firstBlockStart / 60) * 60)
++  const startMinutes = Math.max(0, Math.floor(firstBlockStart / 60) * 60 - 60)
+   const roundedEndMinutes = Math.ceil(lastBlockEnd / 60) * 60
+   const endMinutes = Math.max(
+     startMinutes + MIN_TIMELINE_MINUTES,
+@@ -777,17 +777,17 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+ 
+           <div
+             ref={workspaceScrollRef}
+-            className="overflow-x-auto overscroll-x-contain rounded-[2rem] border border-border/60 bg-muted/10 p-3 shadow-sm sm:p-4"
++            className="overflow-x-auto overscroll-x-contain rounded-[2.25rem] border border-border/50 bg-muted/10 p-4 shadow-sm sm:p-5"
+           >
+             <div
+-              className="routine-builder-scheduler-grid grid min-w-[1220px] items-stretch gap-3 2xl:min-w-0 2xl:gap-4"
++              className="routine-builder-scheduler-grid grid min-w-[1320px] items-stretch gap-x-2 gap-y-4 2xl:min-w-0 2xl:gap-x-3"
+               style={{
+                 ["--routine-builder-timeline-height" as string]: `${timelineHeight}px`,
+-                gridTemplateColumns: "80px repeat(7, minmax(150px, 1fr))",
+-                gridTemplateRows: `96px ${timelineHeight}px`,
++                gridTemplateColumns: "88px repeat(7, minmax(165px, 1fr))",
++                gridTemplateRows: `88px ${timelineHeight}px`,
+               }}
+             >
+-              <div className="routine-builder-timezone-card flex min-h-24 flex-col items-center justify-center rounded-[1.75rem] border border-border/60 bg-background/80 shadow-sm backdrop-blur">
++              <div className="routine-builder-timezone-card flex min-h-[88px] flex-col items-center justify-center rounded-[1.75rem] border border-border/60 bg-background/80 shadow-sm backdrop-blur">
+                 <span className="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">
+                   Horários
+                 </span>
+@@ -798,7 +798,7 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+                   key={`${day.dateKey}-header`}
+                   ref={day.key === selectedWeekday ? selectedDayColumnRef : undefined}
+                   className={cn(
+-                    "routine-builder-day-header flex min-h-24 flex-col items-center justify-center gap-1.5 rounded-[1.75rem] border border-border/60 bg-background/80 shadow-sm backdrop-blur",
++                    "routine-builder-day-header flex min-h-[88px] flex-col items-center justify-center gap-1.5 rounded-[1.75rem] border border-border/60 bg-background/80 shadow-sm backdrop-blur",
+                     day.isToday && "routine-builder-day-header-today border-cyan-400/80 bg-cyan-400/10 shadow-cyan-400/10",
+                   )}
+                 >
+@@ -813,7 +813,7 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+                 {timeSlots.map((slot) => (
+                   <span
+                     key={`time-${slot}`}
+-                    className="routine-builder-time-label absolute right-3 -translate-y-1/2 whitespace-nowrap text-xs leading-4 text-muted-foreground"
++                    className="routine-builder-time-label absolute left-0 right-0 -translate-y-1/2 whitespace-nowrap text-center text-xs leading-4 text-muted-foreground"
+                     style={{ top: minutesToPixels(slot - timelineRange.startMinutes) }}
+                   >
+                     {formatTimeLabel(slot)}
+@@ -855,7 +855,10 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+                       onClick={() => openCreateDialog("study", day.key)}
+                       onDragOver={(event) => handleDayDragOver(event, day.key)}
+                       onDrop={(event) => handleDrop(event, day.key)}
+-                      className="routine-builder-add-slot absolute left-2 right-2 z-10 flex min-h-11 items-center justify-center rounded-2xl border border-dashed border-border/70 bg-background/70 text-muted-foreground transition hover:border-primary/70 hover:bg-primary/10 hover:text-primary"
++                      className={cn(
++                        "routine-builder-add-slot absolute left-2 right-2 z-10 flex min-h-11 items-center justify-center rounded-2xl border border-dashed border-border/70 bg-background/70 text-muted-foreground transition hover:border-primary/70 hover:bg-primary/10 hover:text-primary",
++                        layouts.length > 0 && "opacity-0 group-hover/day-lane:opacity-100 focus-visible:opacity-100",
++                      )}
+                       style={{ top: addButtonTop }}
+                       aria-label={`Adicionar bloco em ${day.label}`}
+                     >
+@@ -885,39 +888,35 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+                           )}
+                           style={{ top, height }}
+                         >
+-                          <div className="flex h-full min-w-0 flex-col justify-between gap-2">
++                          <div className="flex h-full min-w-0 flex-col gap-2">
+                             <div className="flex min-w-0 items-start justify-between gap-2">
+                               <div className="min-w-0 flex-1">
++                                {!isCompactBlock ? (
++                                  <span className="mb-1 block text-[0.72rem] leading-4 text-muted-foreground">
++                                    {block.startTime} – {block.endTime} • {block.durationMinutes}min
++                                  </span>
++                                ) : null}
+                                 <span
+                                   className={cn(
+                                     "wrap-break-word block whitespace-normal font-semibold text-foreground",
+-                                    isCompactBlock ? "text-xs leading-tight" : "text-sm sm:text-base",
++                                    isCompactBlock ? "truncate text-xs leading-tight" : "text-sm leading-snug sm:text-base",
+                                   )}
+                                 >
+                                   {block.title}
+                                 </span>
+-                                {!isCompactBlock ? (
+-                                  <span className="mt-1 block text-xs text-muted-foreground">
+-                                    {block.startTime} – {block.endTime} • {block.durationMinutes}min
+-                                  </span>
+-                                ) : null}
+                               </div>
+ 
+                               <Button
+                                 type="button"
+                                 variant="ghost"
+                                 size="icon-sm"
+-                                className="shrink-0 rounded-full opacity-80 hover:opacity-100"
++                                className="-mr-1 -mt-1 shrink-0 rounded-full opacity-75 hover:opacity-100"
+                                 onClick={() => setOpenMenuBlockId(menuOpen ? null : block.id)}
+                                 aria-label="Abrir ações do bloco"
+                               >
+                                 <MoreHorizontal className="size-4" />
+                               </Button>
+                             </div>
+-
+-                            {!isCompactBlock ? (
+-                              <span className="text-xs text-muted-foreground">{option.label}</span>
+-                            ) : null}
+                           </div>
+ 
+                           {menuOpen ? (
+diff --git a/src/styles/globals.css b/src/styles/globals.css
+index ee4143d..9f2c3bc 100644
+--- a/src/styles/globals.css
++++ b/src/styles/globals.css
+@@ -153,11 +153,12 @@
+ 
+ @layer components {
+   .routine-builder-scheduler-grid {
+-    min-width: 1080px;
++    min-width: 1320px;
+     display: grid;
+-    grid-template-columns: 72px repeat(7, minmax(132px, 1fr));
++    grid-template-columns: 88px repeat(7, minmax(165px, 1fr));
+     grid-template-rows: 88px var(--routine-builder-timeline-height);
+-    gap: 0.75rem;
++    column-gap: 0.5rem;
++    row-gap: 1rem;
+     align-items: stretch;
+   }
+ 
+@@ -204,7 +205,9 @@
+ 
+   .routine-builder-time-label {
+     position: absolute;
+-    right: 0.75rem;
++    left: 0;
++    right: 0;
++    text-align: center;
+     transform: translateY(-50%);
+     font-size: 0.75rem;
+     line-height: 1rem;
+@@ -231,8 +234,8 @@
+ 
+   .routine-builder-add-slot {
+     position: absolute;
+-    left: 0.5rem;
+-    right: 0.5rem;
++    left: 0.55rem;
++    right: 0.55rem;
+     z-index: 2;
+     display: flex;
+     min-height: 2.75rem;
+@@ -253,8 +256,8 @@
+ 
+   .routine-builder-schedule-block {
+     position: absolute;
+-    left: 0.5rem;
+-    right: 0.5rem;
++    left: 0.55rem;
++    right: 0.55rem;
+     z-index: 3;
+     overflow: visible;
+   }
+@@ -265,19 +268,21 @@
+ 
+   @media (min-width: 640px) {
+     .routine-builder-scheduler-grid {
+-      min-width: 1220px;
+-      grid-template-columns: 76px repeat(7, minmax(150px, 1fr));
+-      grid-template-rows: 92px var(--routine-builder-timeline-height);
+-      gap: 0.85rem;
++      min-width: 1320px;
++      grid-template-columns: 88px repeat(7, minmax(165px, 1fr));
++      grid-template-rows: 88px var(--routine-builder-timeline-height);
++      column-gap: 0.5rem;
++      row-gap: 1rem;
+     }
+   }
+ 
+   @media (min-width: 1440px) {
+     .routine-builder-scheduler-grid {
+       min-width: 0;
+-      grid-template-columns: 80px repeat(7, minmax(0, 1fr));
+-      grid-template-rows: 96px var(--routine-builder-timeline-height);
+-      gap: 1rem;
++      grid-template-columns: 88px repeat(7, minmax(0, 1fr));
++      grid-template-rows: 88px var(--routine-builder-timeline-height);
++      column-gap: 0.75rem;
++      row-gap: 1rem;
+     }
+ 
+     .routine-builder-block-panel {

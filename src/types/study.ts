@@ -27,7 +27,9 @@ export interface RoutineBlock {
   id: string
   type: RoutineBlockType
   subjectId?: string
+  repeatSourceId?: string
   title: string
+  description?: string
   startTime: string
   endTime: string
   durationMinutes: number

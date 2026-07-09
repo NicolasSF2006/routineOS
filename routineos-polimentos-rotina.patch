@@ -1,0 +1,652 @@
+diff --git a/src/features/routine-builder/components/routine-builder-view.tsx b/src/features/routine-builder/components/routine-builder-view.tsx
+index 4617946..d48a1e9 100644
+--- a/src/features/routine-builder/components/routine-builder-view.tsx
++++ b/src/features/routine-builder/components/routine-builder-view.tsx
+@@ -71,6 +71,23 @@ interface DragPreviewState {
+   snapped?: boolean
+ }
+ 
++interface DeleteConfirmationState {
++  block: RoutineBlock
++  weekday: Weekday
++}
++
++interface FeedbackToastState {
++  id: number
++  message: string
++  actionLabel?: string
++}
++
++interface UndoSnapshotState {
++  draftRoutine: Routine | null
++  draftWeek: RoutineWeek | null
++  isSaved: boolean
++}
++
+ function readDragPayload(event: DragEvent<HTMLElement>): DragPayload | null {
+   const rawPayload = event.dataTransfer.getData(DND_MIME_TYPE) || event.dataTransfer.getData("text/plain")
+ 
+@@ -281,6 +298,72 @@ function setBlockStartTime(block: RoutineBlock, startMinutes: number): RoutineBl
+   }
+ }
+ 
++function cloneRoutineDraft(routine: Routine | null): Routine | null {
++  return routine ? (JSON.parse(JSON.stringify(routine)) as Routine) : null
++}
++
++function getConflictedBlockIds(blocks: RoutineBlock[], fallbackStartMinutes: number): Set<string> {
++  const conflictedIds = new Set<string>()
++
++  for (let firstIndex = 0; firstIndex < blocks.length; firstIndex += 1) {
++    const firstBlock = blocks[firstIndex]
++    const firstStart = getBlockStartMinutes(firstBlock, fallbackStartMinutes)
++    const firstEnd = firstStart + Math.max(1, firstBlock.durationMinutes)
++
++    for (let secondIndex = firstIndex + 1; secondIndex < blocks.length; secondIndex += 1) {
++      const secondBlock = blocks[secondIndex]
++      const secondStart = getBlockStartMinutes(secondBlock, fallbackStartMinutes)
++      const secondEnd = secondStart + Math.max(1, secondBlock.durationMinutes)
++      const hasConflict = firstStart < secondEnd && secondStart < firstEnd
++
++      if (hasConflict) {
++        conflictedIds.add(firstBlock.id)
++        conflictedIds.add(secondBlock.id)
++      }
++    }
++  }
++
++  return conflictedIds
++}
++
++function getWeekdayConflictLabel(weekday: Weekday): string {
++  const weekdayName = getWeekdayRepeatName(weekday)
++  const article = weekday === "saturday" || weekday === "sunday" ? "no" : "na"
++
++  return `${article} ${weekdayName}`
++}
++
++function joinPortugueseList(items: string[]): string {
++  if (items.length <= 1) return items[0] ?? ""
++  if (items.length === 2) return `${items[0]} e ${items[1]}`
++
++  return `${items.slice(0, -1).join(", ")} e ${items[items.length - 1]}`
++}
++
++function removeBlocksFromRoutine(
++  routine: Routine,
++  shouldRemoveBlock: (block: RoutineBlock) => boolean,
++): Routine {
++  const normalizeDay = (day: RoutineDay): RoutineDay => {
++    const blocks = day.blocks.filter((block) => !shouldRemoveBlock(block))
++
++    return {
++      ...day,
++      blocks,
++      isActive: blocks.length > 0,
++    }
++  }
++
++  return {
++    ...routine,
++    days: routine.days.map(normalizeDay),
++    weeks: routine.weeks?.map((week) => ({
++      ...week,
++      days: week.days.map(normalizeDay),
++    })),
++  }
++}
++
+ function sortRoutineDayBlocksByTime(blocks: RoutineBlock[], fallbackStartMinutes: number): RoutineBlock[] {
+   return blocks
+     .map((block, originalIndex) => ({ block, originalIndex }))
+@@ -373,7 +456,10 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+   const [draftWeek, setDraftWeek] = useState<RoutineWeek | null>(null)
+   const [openMenuBlockId, setOpenMenuBlockId] = useState<string | null>(null)
+   const [editing, setEditing] = useState<EditingState | null>(null)
+-  const [isSaved, setIsSaved] = useState(false)
++  const [deleteConfirmation, setDeleteConfirmation] = useState<DeleteConfirmationState | null>(null)
++  const [isClearConfirmationOpen, setIsClearConfirmationOpen] = useState(false)
++  const [feedbackToast, setFeedbackToast] = useState<FeedbackToastState | null>(null)
++  const [isSaved, setIsSaved] = useState(true)
+   const [dragOverWeekday, setDragOverWeekday] = useState<Weekday | null>(null)
+   const [dragOverBlockId, setDragOverBlockId] = useState<string | null>(null)
+   const [draggingBlockId, setDraggingBlockId] = useState<string | null>(null)
+@@ -387,6 +473,7 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+   const autoScrollDateKeyRef = useRef<string | null>(null)
+   const dragAutoScrollFrameRef = useRef<number | null>(null)
+   const dragAutoScrollSpeedRef = useRef(0)
++  const undoSnapshotRef = useRef<UndoSnapshotState | null>(null)
+ 
+   const selectedDate = parseDateKey(selectedDateKey)
+   const selectedWeekday = getWeekdayFromDateKey(selectedDateKey)
+@@ -410,6 +497,36 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+       }),
+     )
+   }, [draftWeek, fallbackStartMinutes, timelineRange.startMinutes])
++  const conflictSummary = useMemo(() => {
++    if (!draftWeek) {
++      return {
++        blockIds: new Set<string>(),
++        message: null as string | null,
++      }
++    }
++
++    const blockIds = new Set<string>()
++    const weekdaysWithConflict: Weekday[] = []
++
++    WEEK_DAYS.forEach((day) => {
++      const routineDay = getRoutineWeekDay(draftWeek, day.key)
++      const conflictedIds = getConflictedBlockIds(routineDay.blocks, fallbackStartMinutes)
++
++      if (conflictedIds.size > 0) {
++        weekdaysWithConflict.push(day.key)
++        conflictedIds.forEach((blockId) => blockIds.add(blockId))
++      }
++    })
++
++    const message = weekdaysWithConflict.length
++      ? `${weekdaysWithConflict.length === 1 ? "⚠ Existe conflito de horário" : "⚠ Existem conflitos de horário"} ${joinPortugueseList(
++          weekdaysWithConflict.map(getWeekdayConflictLabel),
++        )}.`
++      : null
++
++    return { blockIds, message }
++  }, [draftWeek, fallbackStartMinutes])
++
+   const firstRoutineBlockStartMinutes = useMemo(() => {
+     if (!draftWeek) return null
+ 
+@@ -431,6 +548,7 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+   useEffect(() => {
+     if (isLoading) return
+     setDraftRoutine(routine)
++    setIsSaved(true)
+   }, [isLoading, routine])
+ 
+   useEffect(() => {
+@@ -442,9 +560,16 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+     setDragOverWeekday(null)
+     setDragOverBlockId(null)
+     setDraggingBlockId(null)
+-    setIsSaved(false)
+   }, [draftRoutine, selectedDateKey])
+ 
++  useEffect(() => {
++    if (!feedbackToast) return
++
++    const timeout = window.setTimeout(() => setFeedbackToast(null), feedbackToast.actionLabel ? 6000 : 3500)
++
++    return () => window.clearTimeout(timeout)
++  }, [feedbackToast])
++
+   useEffect(() => {
+     if (!openMenuBlockId) return
+ 
+@@ -509,20 +634,117 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+ 
+   const selectedDay = draftWeek ? getRoutineWeekDay(draftWeek, selectedWeekday) : null
+ 
+-  const hasUnsavedChanges = useMemo(() => {
+-    if (!draftRoutine && !draftWeek) return false
++  const hasUnsavedChanges = !isSaved
+ 
+-    const nextRoutine = draftWeek
+-      ? upsertRoutineWeek(activeDraftRoutine, cloneRoutineWeek(draftWeek))
+-      : activeDraftRoutine
+-
+-    return JSON.stringify(nextRoutine) !== JSON.stringify(routine)
+-  }, [activeDraftRoutine, draftRoutine, draftWeek, routine])
+ 
+   const getRoutineWithCurrentDraftWeek = (baseRoutine: Routine = activeDraftRoutine) => {
+     return draftWeek ? upsertRoutineWeek(baseRoutine, cloneRoutineWeek(draftWeek)) : baseRoutine
+   }
+ 
++  const captureUndoSnapshot = () => {
++    undoSnapshotRef.current = {
++      draftRoutine: cloneRoutineDraft(draftRoutine),
++      draftWeek: draftWeek ? cloneRoutineWeek(draftWeek) : null,
++      isSaved,
++    }
++  }
++
++  const showFeedbackToast = (message: string, actionLabel?: string) => {
++    setFeedbackToast({
++      id: Date.now(),
++      message,
++      actionLabel,
++    })
++  }
++
++  const restoreUndoSnapshot = () => {
++    const snapshot = undoSnapshotRef.current
++    if (!snapshot) return
++
++    setDraftRoutine(snapshot.draftRoutine)
++    setDraftWeek(snapshot.draftWeek)
++    setIsSaved(snapshot.isSaved)
++    setFeedbackToast(null)
++    undoSnapshotRef.current = null
++  }
++
++  const getRepeatDateKeysFromRoutine = (sourceRoutine: Routine, repeatSourceId: string): string[] => {
++    const dateKeys = sourceRoutine.weeks?.flatMap((week) =>
++      week.days.flatMap((day) =>
++        day.blocks.some((block) => block.repeatSourceId === repeatSourceId)
++          ? [getDateKeyForWeekdayInWeek(week.weekStartDate, day.weekday)]
++          : [],
++      ),
++    ) ?? []
++
++    return dateKeys.filter((dateKey, index, list) => list.indexOf(dateKey) === index)
++  }
++
++  const applyRepeatedBlockToRoutine = (
++    baseRoutine: Routine,
++    sourceBlock: RoutineBlock,
++    sourceWeekday: Weekday,
++    targetDateKeys: string[],
++    repeatSourceId: string,
++  ): Routine => {
++    if (!draftWeek || targetDateKeys.length === 0) return baseRoutine
++
++    const sourceDateKey = getDateKeyForWeekdayInWeek(draftWeek.weekStartDate, sourceWeekday)
++
++    return targetDateKeys.reduce((currentRoutine, dateKey) => {
++      const targetWeekday = getWeekdayFromDateKey(dateKey)
++      const targetWeek = createRoutineWeekFromDate(dateKey, currentRoutine)
++      const targetDay = getRoutineWeekDay(targetWeek, targetWeekday)
++      const existingRepeatedBlock = targetDay.blocks.find((block) => block.repeatSourceId === repeatSourceId)
++      const targetBlock: RoutineBlock = {
++        ...sourceBlock,
++        id: dateKey === sourceDateKey ? sourceBlock.id : existingRepeatedBlock?.id ?? createId(`block-${targetWeekday}`),
++        repeatSourceId,
++      }
++
++      const updatedWeek = updateRoutineWeekDay(targetWeek, targetWeekday, (day) => {
++        const blocks = day.blocks.filter(
++          (block) => block.id !== sourceBlock.id && block.repeatSourceId !== repeatSourceId,
++        )
++        const normalizedBlocks = sortRoutineDayBlocksByTime([...blocks, targetBlock], fallbackStartMinutes)
++
++        return {
++          ...day,
++          blocks: normalizedBlocks,
++          isActive: normalizedBlocks.length > 0,
++        }
++      })
++
++      return upsertRoutineWeek(currentRoutine, updatedWeek)
++    }, baseRoutine)
++  }
++
++  const getRoutineWithSyncedRecurringBlocks = () => {
++    if (!draftWeek) return activeDraftRoutine
++
++    let nextRoutine = getRoutineWithCurrentDraftWeek()
++
++    draftWeek.days.forEach((day) => {
++      day.blocks.forEach((block) => {
++        if (!block.repeatSourceId) return
++
++        const targetDateKeys = getRepeatDateKeysFromRoutine(nextRoutine, block.repeatSourceId)
++
++        if (targetDateKeys.length <= 1) return
++
++        nextRoutine = applyRepeatedBlockToRoutine(
++          nextRoutine,
++          block,
++          day.weekday,
++          targetDateKeys,
++          block.repeatSourceId,
++        )
++      })
++    })
++
++    return nextRoutine
++  }
++
+   const moveWeek = (direction: -1 | 1) => {
+     const nextRoutine = getRoutineWithCurrentDraftWeek()
+     const nextDate = parseDateKey(selectedDateKey)
+@@ -634,32 +856,13 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+     if (!editing || !draftWeek || targetDateKeys.length === 0) return
+ 
+     const repeatSourceId = sourceBlock.repeatSourceId ?? `repeat-${sourceBlock.id}`
+-    const sourceDateKey = getDateKeyForWeekdayInWeek(draftWeek.weekStartDate, editing.weekday)
+-
+-    const nextRoutine = targetDateKeys.reduce((currentRoutine, dateKey) => {
+-      const targetWeekday = getWeekdayFromDateKey(dateKey)
+-      const targetWeek = createRoutineWeekFromDate(dateKey, currentRoutine)
+-      const targetBlock: RoutineBlock = {
+-        ...sourceBlock,
+-        id: dateKey === sourceDateKey ? sourceBlock.id : createId(`block-${targetWeekday}`),
+-        repeatSourceId,
+-      }
+-
+-      const updatedWeek = updateRoutineWeekDay(targetWeek, targetWeekday, (day) => {
+-        const blocks = day.blocks.filter(
+-          (block) => block.id !== sourceBlock.id && block.repeatSourceId !== repeatSourceId,
+-        )
+-        const normalizedBlocks = sortRoutineDayBlocksByTime([...blocks, targetBlock], fallbackStartMinutes)
+-
+-        return {
+-          ...day,
+-          blocks: normalizedBlocks,
+-          isActive: normalizedBlocks.length > 0,
+-        }
+-      })
+-
+-      return upsertRoutineWeek(currentRoutine, updatedWeek)
+-    }, getRoutineWithCurrentDraftWeek())
++    const nextRoutine = applyRepeatedBlockToRoutine(
++      getRoutineWithCurrentDraftWeek(),
++      { ...sourceBlock, repeatSourceId },
++      editing.weekday,
++      targetDateKeys,
++      repeatSourceId,
++    )
+ 
+     setDraftRoutine(nextRoutine)
+     setDraftWeek(createRoutineWeekFromDate(selectedDateKey, nextRoutine))
+@@ -733,18 +936,63 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+         {
+           ...block,
+           id: createId(`block-${weekday}`),
++          repeatSourceId: undefined,
+           title: `${block.title} cópia`,
+         },
+       ],
+     }))
+   }
+ 
+-  const deleteBlock = (blockId: string, weekday: Weekday) => {
+-    setOpenMenuBlockId(null)
++  const deleteSingleBlock = (blockId: string, weekday: Weekday, showUndo = true) => {
++    if (showUndo) captureUndoSnapshot()
++
+     updateDraftDay(weekday, (day) => ({
+       ...day,
+       blocks: day.blocks.filter((block) => block.id !== blockId),
+     }))
++
++    if (showUndo) showFeedbackToast("Tarefa removida.", "Desfazer")
++  }
++
++  const deleteRepeatedBlocks = (repeatSourceId: string) => {
++    captureUndoSnapshot()
++
++    const nextRoutine = removeBlocksFromRoutine(
++      getRoutineWithCurrentDraftWeek(),
++      (block) => block.repeatSourceId === repeatSourceId,
++    )
++
++    setDraftRoutine(nextRoutine)
++    setDraftWeek(createRoutineWeekFromDate(selectedDateKey, nextRoutine))
++    setIsSaved(false)
++    showFeedbackToast("Repetições removidas.", "Desfazer")
++  }
++
++  const requestDeleteBlock = (block: RoutineBlock, weekday: Weekday) => {
++    setOpenMenuBlockId(null)
++
++    if (block.repeatSourceId) {
++      setDeleteConfirmation({ block, weekday })
++      return
++    }
++
++    deleteSingleBlock(block.id, weekday)
++  }
++
++  const confirmDeleteCurrentOccurrence = () => {
++    if (!deleteConfirmation) return
++
++    deleteSingleBlock(deleteConfirmation.block.id, deleteConfirmation.weekday)
++    setDeleteConfirmation(null)
++  }
++
++  const confirmDeleteAllOccurrences = () => {
++    const repeatSourceId = deleteConfirmation?.block.repeatSourceId
++
++    if (!repeatSourceId) return
++
++    deleteRepeatedBlocks(repeatSourceId)
++    setDeleteConfirmation(null)
+   }
+ 
+   const moveBlock = (blockId: string, direction: -1 | 1, weekday: Weekday) => {
+@@ -891,9 +1139,11 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+       })
+     }, draftWeek)
+ 
++    captureUndoSnapshot()
+     setDraftWeek(withMovedBlock)
+     setOpenMenuBlockId(null)
+     setIsSaved(false)
++    showFeedbackToast("Bloco movido.", "Desfazer")
+   }
+ 
+   const getDraggedBlockDuration = (payload: DragPayload | null): number => {
+@@ -1111,22 +1361,24 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+   }
+ 
+   const saveCurrentWeek = () => {
+-    if (!draftWeek) return
+-    const nextRoutine = getRoutineWithCurrentDraftWeek()
++    if (!draftWeek || !hasUnsavedChanges) return
++    const nextRoutine = getRoutineWithSyncedRecurringBlocks()
+ 
+     setDraftRoutine(nextRoutine)
+     saveRoutine(nextRoutine)
+     setIsSaved(true)
++    showFeedbackToast("Rotina salva com sucesso.")
+   }
+ 
+   const saveCurrentMonthRoutine = () => {
+     if (!hasUnsavedChanges) return
+ 
+-    const nextRoutine = getRoutineWithCurrentDraftWeek()
++    const nextRoutine = getRoutineWithSyncedRecurringBlocks()
+ 
+     setDraftRoutine(nextRoutine)
+     saveRoutine(nextRoutine)
+     setIsSaved(true)
++    showFeedbackToast("Rotina salva com sucesso.")
+   }
+ 
+   const repeatCurrentWeekForMonth = () => {
+@@ -1143,17 +1395,13 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+   }
+ 
+   const clearCurrentMonthRoutine = () => {
+-    const confirmed = window.confirm(
+-      "Limpar vai remover todos os blocos do mês atual no rascunho. Clique em Salvar depois para persistir a limpeza. Deseja continuar?",
+-    )
+-
+-    if (!confirmed) return
+-
+     const weekStartKeys = getVisibleMonthWeekStartKeys(
+       selectedDate.getFullYear(),
+       selectedDate.getMonth(),
+     )
+ 
++    captureUndoSnapshot()
++
+     const nextRoutine = weekStartKeys.reduce((currentRoutine, weekStartDate) => {
+       return upsertRoutineWeek(currentRoutine, {
+         id: `week-${weekStartDate}`,
+@@ -1171,7 +1419,9 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+     setDraftWeek(createRoutineWeekFromDate(selectedDateKey, nextRoutine))
+     setOpenMenuBlockId(null)
+     setEditing(null)
++    setIsClearConfirmationOpen(false)
+     setIsSaved(false)
++    showFeedbackToast("Rotina do mês limpa.", "Desfazer")
+   }
+ 
+   if (isLoading || !draftWeek || !selectedDay) {
+@@ -1315,6 +1565,7 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+                       const option = getBuilderBlockOption(block.type)
+                       const menuOpen = openMenuBlockId === block.id
+                       const isCompactBlock = height < 64
++                      const hasTimeConflict = conflictSummary.blockIds.has(block.id)
+ 
+                       return (
+                         <div
+@@ -1328,7 +1579,9 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+                           className={cn(
+                             "routine-builder-schedule-block group absolute left-2 right-2 cursor-grab overflow-visible rounded-2xl border text-left shadow-sm transition active:cursor-grabbing",
+                             menuOpen ? "z-[900]" : "z-20",
+-                            option.className,
++                            hasTimeConflict
++                              ? "border-red-500/70 bg-red-500/20 ring-1 ring-red-400/40"
++                              : option.className,
+                             draggingBlockId === block.id && "opacity-50",
+                             dragOverBlockId === block.id && "ring-2 ring-primary/60",
+                             isCompactBlock ? "px-2 py-1.5" : "p-3",
+@@ -1424,7 +1677,7 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+                                 type="button"
+                                 variant="ghost"
+                                 className="min-h-9 justify-start text-destructive hover:text-destructive"
+-                                onClick={() => deleteBlock(block.id, day.key)}
++                                onClick={() => requestDeleteBlock(block, day.key)}
+                               >
+                                 <Trash2 className="mr-2 size-4" />
+                                 Excluir
+@@ -1440,29 +1693,35 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+             </div>
+           </div>
+ 
+-          <div className="mt-5 flex flex-col gap-3 sm:mt-6 sm:flex-row sm:items-center sm:justify-end">
+-            <Button
+-              type="button"
+-              variant="outline"
+-              className="min-h-11 w-full sm:w-auto"
+-              onClick={clearCurrentMonthRoutine}
+-            >
+-              Limpar
+-            </Button>
++          <div className="mt-5 flex flex-col gap-3 sm:mt-6 sm:flex-row sm:items-center sm:justify-between">
++            <div className="min-h-6 text-sm font-medium text-red-300">
++              {conflictSummary.message ? <span>{conflictSummary.message}</span> : null}
++            </div>
+ 
+-            <Button
+-              type="button"
+-              className={cn(
+-                "min-h-11 w-full sm:w-auto",
+-                !hasUnsavedChanges &&
+-                  "cursor-not-allowed border border-border bg-muted text-muted-foreground opacity-70 hover:bg-muted hover:text-muted-foreground",
+-              )}
+-              onClick={saveCurrentMonthRoutine}
+-              disabled={!hasUnsavedChanges}
+-            >
+-              <Save className="mr-2 size-4" />
+-              Salvar
+-            </Button>
++            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
++              <Button
++                type="button"
++                variant="outline"
++                className="min-h-11 w-full sm:w-auto"
++                onClick={() => setIsClearConfirmationOpen(true)}
++              >
++                Limpar
++              </Button>
++
++              <Button
++                type="button"
++                className={cn(
++                  "min-h-11 w-full sm:w-auto",
++                  !hasUnsavedChanges &&
++                    "cursor-not-allowed border border-border bg-muted text-muted-foreground opacity-70 hover:bg-muted hover:text-muted-foreground",
++                )}
++                onClick={saveCurrentMonthRoutine}
++                disabled={!hasUnsavedChanges}
++              >
++                <Save className="mr-2 size-4" />
++                {hasUnsavedChanges ? "Salvar" : "Salvo"}
++              </Button>
++            </div>
+           </div>
+         </section>
+ 
+@@ -1713,6 +1972,79 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+           </div>
+         </div>
+       ) : null}
++
++
++      {deleteConfirmation ? (
++        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/35 p-3 backdrop-blur-sm sm:items-center sm:p-4">
++          <div
++            className="w-full max-w-md rounded-2xl border border-border bg-background p-5 shadow-2xl sm:p-6"
++            role="dialog"
++            aria-modal="true"
++            aria-labelledby="routine-delete-modal-title"
++          >
++            <h2 id="routine-delete-modal-title" className="text-xl font-semibold text-foreground">
++              Excluir tarefa recorrente
++            </h2>
++            <p className="mt-3 text-base leading-7 text-muted-foreground">
++              Essa tarefa faz parte de uma repetição. O que deseja excluir?
++            </p>
++
++            <div className="mt-6 grid gap-3">
++              <Button type="button" variant="outline" className="min-h-11" onClick={confirmDeleteCurrentOccurrence}>
++                Apenas esta tarefa
++              </Button>
++              <Button type="button" variant="destructive" className="min-h-11" onClick={confirmDeleteAllOccurrences}>
++                Todas as repetições
++              </Button>
++              <Button type="button" variant="ghost" className="min-h-11" onClick={() => setDeleteConfirmation(null)}>
++                Cancelar
++              </Button>
++            </div>
++          </div>
++        </div>
++      ) : null}
++
++      {isClearConfirmationOpen ? (
++        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/35 p-3 backdrop-blur-sm sm:items-center sm:p-4">
++          <div
++            className="w-full max-w-md rounded-2xl border border-border bg-background p-5 shadow-2xl sm:p-6"
++            role="dialog"
++            aria-modal="true"
++            aria-labelledby="routine-clear-modal-title"
++          >
++            <h2 id="routine-clear-modal-title" className="text-xl font-semibold text-foreground">
++              Limpar rotina do mês?
++            </h2>
++            <p className="mt-3 text-base leading-7 text-muted-foreground">
++              Todos os blocos do mês atual serão removidos do rascunho. Depois, clique em Salvar para persistir a limpeza.
++            </p>
++
++            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
++              <Button type="button" variant="outline" className="min-h-11" onClick={() => setIsClearConfirmationOpen(false)}>
++                Cancelar
++              </Button>
++              <Button type="button" variant="destructive" className="min-h-11" onClick={clearCurrentMonthRoutine}>
++                Limpar mês
++              </Button>
++            </div>
++          </div>
++        </div>
++      ) : null}
++
++      {feedbackToast ? (
++        <div className="fixed bottom-4 right-4 z-[10000] flex max-w-sm items-center gap-3 rounded-2xl border border-border bg-background px-4 py-3 text-sm text-foreground shadow-2xl ring-1 ring-white/10">
++          <span className="min-w-0 flex-1">{feedbackToast.message}</span>
++          {feedbackToast.actionLabel ? (
++            <button
++              type="button"
++              className="shrink-0 font-semibold text-primary transition-colors hover:text-primary/80"
++              onClick={restoreUndoSnapshot}
++            >
++              {feedbackToast.actionLabel}
++            </button>
++          ) : null}
++        </div>
++      ) : null}
+     </div>
+   )
+ }

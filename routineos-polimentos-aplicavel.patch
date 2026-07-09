@@ -1,0 +1,573 @@
+diff --git a/src/features/routine-builder/components/routine-builder-view.tsx b/src/features/routine-builder/components/routine-builder-view.tsx
+index c26f5c8..b2a930c 100644
+--- a/src/features/routine-builder/components/routine-builder-view.tsx
++++ b/src/features/routine-builder/components/routine-builder-view.tsx
+@@ -3,6 +3,7 @@
+ import { useEffect, useMemo, useRef, useState } from "react"
+ import type { DragEvent } from "react"
+ import {
++  AlertTriangle,
+   ChevronDown,
+   ChevronLeft,
+   ChevronRight,
+@@ -11,6 +12,7 @@ import {
+   Pencil,
+   Save,
+   Trash2,
++  Undo2,
+   X,
+ } from "lucide-react"
+ import { Button } from "@/components/ui/button"
+@@ -71,6 +73,19 @@ interface DragPreviewState {
+   snapped?: boolean
+ }
+ 
++interface DeleteConfirmationState {
++  blockId: string
++  weekday: Weekday
++  title: string
++  repeatSourceId?: string
++}
++
++interface RoutineToastState {
++  id: string
++  message: string
++  undoRoutine?: Routine
++}
++
+ function readDragPayload(event: DragEvent<HTMLElement>): DragPayload | null {
+   const rawPayload = event.dataTransfer.getData(DND_MIME_TYPE) || event.dataTransfer.getData("text/plain")
+ 
+@@ -366,6 +381,54 @@ function getDayBlockLayouts(
+     })
+ }
+ 
++function getConflictingBlockIds(week: RoutineWeek, fallbackStartMinutes: number): Set<string> {
++  const conflictingBlockIds = new Set<string>()
++
++  week.days.forEach((day) => {
++    const blocks = [...day.blocks].sort(
++      (a, b) => getBlockStartMinutes(a, fallbackStartMinutes) - getBlockStartMinutes(b, fallbackStartMinutes),
++    )
++
++    blocks.forEach((currentBlock, currentIndex) => {
++      const currentStart = getBlockStartMinutes(currentBlock, fallbackStartMinutes)
++      const currentEnd = getBlockEndMinutes(currentBlock, fallbackStartMinutes)
++
++      blocks.slice(currentIndex + 1).forEach((nextBlock) => {
++        const nextStart = getBlockStartMinutes(nextBlock, fallbackStartMinutes)
++        const nextEnd = getBlockEndMinutes(nextBlock, fallbackStartMinutes)
++
++        if (currentStart < nextEnd && nextStart < currentEnd) {
++          conflictingBlockIds.add(currentBlock.id)
++          conflictingBlockIds.add(nextBlock.id)
++        }
++      })
++    })
++  })
++
++  return conflictingBlockIds
++}
++
++function getConflictWeekdays(week: RoutineWeek, fallbackStartMinutes: number): Weekday[] {
++  return week.days
++    .filter((day) => getConflictingBlockIds({ ...week, days: [day] }, fallbackStartMinutes).size > 0)
++    .map((day) => day.weekday)
++}
++
++function formatConflictMessage(weekdays: Weekday[]): string | null {
++  if (weekdays.length === 0) return null
++
++  const labels = weekdays.map((weekday) => getWeekdayRepeatName(weekday))
++
++  if (labels.length === 1) {
++    return `Existe conflito de horário na ${labels[0]}.`
++  }
++
++  const lastLabel = labels[labels.length - 1]
++  const initialLabels = labels.slice(0, -1).join(", ")
++
++  return `Existem conflitos de horário na ${initialLabels} e ${lastLabel}.`
++}
++
+ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps) {
+   const { routine, saveRoutine, isLoading } = useRoutine()
+   const [selectedDateKey, setSelectedDateKey] = useState(() => getTodayDateKey())
+@@ -374,6 +437,9 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+   const [openMenuBlockId, setOpenMenuBlockId] = useState<string | null>(null)
+   const [editing, setEditing] = useState<EditingState | null>(null)
+   const [isSaved, setIsSaved] = useState(false)
++  const [deleteConfirmation, setDeleteConfirmation] = useState<DeleteConfirmationState | null>(null)
++  const [isClearConfirmationOpen, setIsClearConfirmationOpen] = useState(false)
++  const [toast, setToast] = useState<RoutineToastState | null>(null)
+   const [dragOverWeekday, setDragOverWeekday] = useState<Weekday | null>(null)
+   const [dragOverBlockId, setDragOverBlockId] = useState<string | null>(null)
+   const [draggingBlockId, setDraggingBlockId] = useState<string | null>(null)
+@@ -381,6 +447,7 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+   const [dragPreview, setDragPreview] = useState<DragPreviewState | null>(null)
+   const [isBlockPanelOpen, setIsBlockPanelOpen] = useState(false)
+   const dragStartOffsetMinutesRef = useRef(0)
++  const toastTimerRef = useRef<number | null>(null)
+   const openMenuRef = useRef<HTMLDivElement | null>(null)
+   const workspaceScrollRef = useRef<HTMLDivElement | null>(null)
+   const selectedDayColumnRef = useRef<HTMLDivElement | null>(null)
+@@ -410,6 +477,15 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+       }),
+     )
+   }, [draftWeek, fallbackStartMinutes, timelineRange.startMinutes])
++  const conflictBlockIds = useMemo(
++    () => (draftWeek ? getConflictingBlockIds(draftWeek, fallbackStartMinutes) : new Set<string>()),
++    [draftWeek, fallbackStartMinutes],
++  )
++  const conflictMessage = useMemo(
++    () => (draftWeek ? formatConflictMessage(getConflictWeekdays(draftWeek, fallbackStartMinutes)) : null),
++    [draftWeek, fallbackStartMinutes],
++  )
++
+   const firstRoutineBlockStartMinutes = useMemo(() => {
+     if (!draftWeek) return null
+ 
+@@ -462,6 +538,14 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+     return () => document.removeEventListener("pointerdown", handlePointerDown)
+   }, [openMenuBlockId])
+ 
++  useEffect(() => {
++    return () => {
++      if (toastTimerRef.current !== null) {
++        window.clearTimeout(toastTimerRef.current)
++      }
++    }
++  }, [])
++
+   useEffect(() => {
+     const workspace = workspaceScrollRef.current
+ 
+@@ -513,6 +597,84 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+     return draftWeek ? upsertRoutineWeek(baseRoutine, cloneRoutineWeek(draftWeek)) : baseRoutine
+   }
+ 
++  const showToast = (nextToast: Omit<RoutineToastState, "id">) => {
++    if (toastTimerRef.current !== null) {
++      window.clearTimeout(toastTimerRef.current)
++    }
++
++    setToast({ id: createId("toast"), ...nextToast })
++
++    toastTimerRef.current = window.setTimeout(() => {
++      setToast(null)
++      toastTimerRef.current = null
++    }, 4500)
++  }
++
++  const restoreRoutineSnapshot = (snapshot: Routine) => {
++    setDraftRoutine(snapshot)
++    setDraftWeek(createRoutineWeekFromDate(selectedDateKey, snapshot))
++    setIsSaved(JSON.stringify(snapshot) === JSON.stringify(routine))
++    showToast({ message: "Ação desfeita." })
++  }
++
++  const syncRecurringSeriesFromCurrentWeek = (routineToSync: Routine): Routine => {
++    if (!draftWeek) return routineToSync
++
++    const recurringBlocks = draftWeek.days.flatMap((day) =>
++      day.blocks.flatMap((block) =>
++        block.repeatSourceId ? [{ weekday: day.weekday, block }] : [],
++      ),
++    )
++
++    if (recurringBlocks.length === 0) return routineToSync
++
++    return recurringBlocks.reduce((currentRoutine, { weekday, block }) => {
++      const repeatSourceId = block.repeatSourceId
++      if (!repeatSourceId) return currentRoutine
++
++      const sourceStartMinutes = getBlockStartMinutes(block, fallbackStartMinutes)
++      const sourceBlock = setBlockStartTime({ ...block, repeatSourceId }, sourceStartMinutes)
++      const weeks = currentRoutine.weeks ?? []
++
++      return {
++        ...currentRoutine,
++        weeks: weeks.map((week) => {
++          const existingBlock = week.days
++            .flatMap((day) => day.blocks)
++            .find((candidate) => candidate.repeatSourceId === repeatSourceId)
++
++          if (!existingBlock) return week
++
++          return {
++            ...week,
++            days: week.days.map((day) => {
++              const remainingBlocks = day.blocks.filter(
++                (candidate) => candidate.repeatSourceId !== repeatSourceId,
++              )
++              const nextBlocks =
++                day.weekday === weekday
++                  ? [
++                      ...remainingBlocks,
++                      {
++                        ...sourceBlock,
++                        id: existingBlock.id,
++                      },
++                    ]
++                  : remainingBlocks
++              const normalizedBlocks = sortRoutineDayBlocksByTime(nextBlocks, fallbackStartMinutes)
++
++              return {
++                ...day,
++                blocks: normalizedBlocks,
++                isActive: normalizedBlocks.length > 0,
++              }
++            }),
++          }
++        }),
++      }
++    }, routineToSync)
++  }
++
+   const moveWeek = (direction: -1 | 1) => {
+     const nextRoutine = getRoutineWithCurrentDraftWeek()
+     const nextDate = parseDateKey(selectedDateKey)
+@@ -729,12 +891,59 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+     }))
+   }
+ 
+-  const deleteBlock = (blockId: string, weekday: Weekday) => {
++  const deleteSingleBlock = (blockId: string, weekday: Weekday) => {
++    const previousRoutine = getRoutineWithCurrentDraftWeek()
++
+     setOpenMenuBlockId(null)
+     updateDraftDay(weekday, (day) => ({
+       ...day,
+       blocks: day.blocks.filter((block) => block.id !== blockId),
+     }))
++    setDeleteConfirmation(null)
++    showToast({ message: "Tarefa removida.", undoRoutine: previousRoutine })
++  }
++
++  const deleteRecurringSeries = (repeatSourceId: string) => {
++    const previousRoutine = getRoutineWithCurrentDraftWeek()
++    const currentRoutine = getRoutineWithCurrentDraftWeek()
++
++    const nextRoutine: Routine = {
++      ...currentRoutine,
++      weeks: currentRoutine.weeks?.map((week) => ({
++        ...week,
++        days: week.days.map((day) => {
++          const blocks = day.blocks.filter((block) => block.repeatSourceId !== repeatSourceId)
++
++          return {
++            ...day,
++            blocks,
++            isActive: blocks.length > 0,
++          }
++        }),
++      })),
++    }
++
++    setDraftRoutine(nextRoutine)
++    setDraftWeek(createRoutineWeekFromDate(selectedDateKey, nextRoutine))
++    setOpenMenuBlockId(null)
++    setDeleteConfirmation(null)
++    setIsSaved(false)
++    showToast({ message: "Repetições removidas.", undoRoutine: previousRoutine })
++  }
++
++  const requestDeleteBlock = (block: RoutineBlock, weekday: Weekday) => {
++    if (block.repeatSourceId) {
++      setOpenMenuBlockId(null)
++      setDeleteConfirmation({
++        blockId: block.id,
++        weekday,
++        title: block.title,
++        repeatSourceId: block.repeatSourceId,
++      })
++      return
++    }
++
++    deleteSingleBlock(block.id, weekday)
+   }
+ 
+   const moveBlock = (blockId: string, direction: -1 | 1, weekday: Weekday) => {
+@@ -848,6 +1057,7 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+   const moveBlockToDay = (sourceWeekday: Weekday, blockId: string, targetWeekday: Weekday, startMinutes: number) => {
+     if (!draftWeek) return
+ 
++    const previousRoutine = getRoutineWithCurrentDraftWeek()
+     const sourceDay = getRoutineWeekDay(draftWeek, sourceWeekday)
+     const movedBlock = sourceDay.blocks.find((block) => block.id === blockId)
+ 
+@@ -884,6 +1094,7 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+     setDraftWeek(withMovedBlock)
+     setOpenMenuBlockId(null)
+     setIsSaved(false)
++    showToast({ message: "Bloco movido.", undoRoutine: previousRoutine })
+   }
+ 
+   const getDraggedBlockDuration = (payload: DragPayload | null): number => {
+@@ -1112,11 +1323,13 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+   const saveCurrentMonthRoutine = () => {
+     if (isSaved) return
+ 
+-    const nextRoutine = getRoutineWithCurrentDraftWeek()
++    const nextRoutine = syncRecurringSeriesFromCurrentWeek(getRoutineWithCurrentDraftWeek())
+ 
+     setDraftRoutine(nextRoutine)
++    setDraftWeek(createRoutineWeekFromDate(selectedDateKey, nextRoutine))
+     saveRoutine(nextRoutine)
+     setIsSaved(true)
++    showToast({ message: "Rotina salva com sucesso." })
+   }
+ 
+   const repeatCurrentWeekForMonth = () => {
+@@ -1133,12 +1346,11 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+   }
+ 
+   const clearCurrentMonthRoutine = () => {
+-    const confirmed = window.confirm(
+-      "Limpar vai remover todos os blocos do mês atual no rascunho. Clique em Salvar depois para persistir a limpeza. Deseja continuar?",
+-    )
+-
+-    if (!confirmed) return
++    setIsClearConfirmationOpen(true)
++  }
+ 
++  const confirmClearCurrentMonthRoutine = () => {
++    const previousRoutine = getRoutineWithCurrentDraftWeek()
+     const weekStartKeys = getVisibleMonthWeekStartKeys(
+       selectedDate.getFullYear(),
+       selectedDate.getMonth(),
+@@ -1161,7 +1373,9 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+     setDraftWeek(createRoutineWeekFromDate(selectedDateKey, nextRoutine))
+     setOpenMenuBlockId(null)
+     setEditing(null)
++    setIsClearConfirmationOpen(false)
+     setIsSaved(false)
++    showToast({ message: "Rotina limpa.", undoRoutine: previousRoutine })
+   }
+ 
+   if (isLoading || !draftWeek || !selectedDay) {
+@@ -1305,6 +1519,7 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+                       const option = getBuilderBlockOption(block.type)
+                       const menuOpen = openMenuBlockId === block.id
+                       const isCompactBlock = height < 64
++                      const hasConflict = conflictBlockIds.has(block.id)
+ 
+                       return (
+                         <div
+@@ -1319,6 +1534,7 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+                             "routine-builder-schedule-block group absolute left-2 right-2 cursor-grab overflow-visible rounded-2xl border text-left shadow-sm transition active:cursor-grabbing",
+                             menuOpen ? "z-[900]" : "z-20",
+                             option.className,
++                            hasConflict && "border-red-400/80 bg-red-500/20 shadow-red-950/30 ring-1 ring-red-400/50",
+                             draggingBlockId === block.id && "opacity-50",
+                             dragOverBlockId === block.id && "ring-2 ring-primary/60",
+                             isCompactBlock ? "px-2 py-1.5" : "p-3",
+@@ -1343,6 +1559,7 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+                                   isCompactBlock
+                                     ? "truncate text-sm leading-none"
+                                     : "whitespace-normal text-base leading-snug",
++                                  hasConflict && "text-red-50",
+                                 )}
+                               >
+                                 {block.title}
+@@ -1350,6 +1567,7 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+                               <span
+                                 className={cn(
+                                   "text-sm text-muted-foreground",
++                                  hasConflict && "text-red-100/80",
+                                   isCompactBlock ? "shrink-0 leading-none" : "mt-1 block leading-5",
+                                 )}
+                               >
+@@ -1414,7 +1632,7 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+                                 type="button"
+                                 variant="ghost"
+                                 className="min-h-9 justify-start text-destructive hover:text-destructive"
+-                                onClick={() => deleteBlock(block.id, day.key)}
++                                onClick={() => requestDeleteBlock(block, day.key)}
+                               >
+                                 <Trash2 className="mr-2 size-4" />
+                                 Excluir
+@@ -1430,29 +1648,40 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+             </div>
+           </div>
+ 
+-          <div className="mt-5 flex flex-col gap-3 sm:mt-6 sm:flex-row sm:items-center sm:justify-end">
+-            <Button
+-              type="button"
+-              variant="outline"
+-              className="min-h-11 w-full sm:w-auto"
+-              onClick={clearCurrentMonthRoutine}
+-            >
+-              Limpar
+-            </Button>
++          <div className="mt-5 flex flex-col gap-3 sm:mt-6 sm:flex-row sm:items-center sm:justify-between">
++            <div className="min-h-6">
++              {conflictMessage ? (
++                <p className="flex items-center gap-2 text-sm font-medium text-red-300">
++                  <AlertTriangle className="size-4 shrink-0" />
++                  {conflictMessage}
++                </p>
++              ) : null}
++            </div>
+ 
+-            <Button
+-              type="button"
+-              className={cn(
+-                "min-h-11 w-full sm:w-auto",
+-                isSaved &&
+-                  "cursor-not-allowed border border-border bg-muted text-muted-foreground opacity-70 hover:bg-muted hover:text-muted-foreground",
+-              )}
+-              onClick={saveCurrentMonthRoutine}
+-              disabled={isSaved}
+-            >
+-              <Save className="mr-2 size-4" />
+-              Salvar
+-            </Button>
++            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
++              <Button
++                type="button"
++                variant="outline"
++                className="min-h-11 w-full sm:w-auto"
++                onClick={clearCurrentMonthRoutine}
++              >
++                Limpar
++              </Button>
++
++              <Button
++                type="button"
++                className={cn(
++                  "min-h-11 w-full sm:w-auto",
++                  isSaved &&
++                    "cursor-not-allowed border border-border bg-muted text-muted-foreground opacity-70 hover:bg-muted hover:text-muted-foreground",
++                )}
++                onClick={saveCurrentMonthRoutine}
++                disabled={isSaved}
++              >
++                <Save className="mr-2 size-4" />
++                {isSaved ? "Salvo" : "Salvar"}
++              </Button>
++            </div>
+           </div>
+         </section>
+ 
+@@ -1485,6 +1714,120 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+         </aside>
+       </div>
+ 
++      {toast ? (
++        <div className="fixed bottom-5 right-5 z-[10000] flex max-w-sm items-center gap-3 rounded-2xl border border-border bg-background px-4 py-3 text-sm text-foreground shadow-2xl ring-1 ring-white/10">
++          <span className="min-w-0 flex-1">{toast.message}</span>
++          {toast.undoRoutine ? (
++            <Button
++              type="button"
++              variant="ghost"
++              size="sm"
++              className="h-8 shrink-0 gap-1 px-2 text-xs"
++              onClick={() => restoreRoutineSnapshot(toast.undoRoutine!)}
++            >
++              <Undo2 className="size-3.5" />
++              Desfazer
++            </Button>
++          ) : null}
++        </div>
++      ) : null}
++
++      {isClearConfirmationOpen ? (
++        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/35 p-3 backdrop-blur-sm sm:items-center sm:p-4">
++          <div
++            className="w-full max-w-md overflow-hidden rounded-2xl border border-border bg-background shadow-2xl"
++            role="dialog"
++            aria-modal="true"
++            aria-labelledby="routine-clear-modal-title"
++          >
++            <div className="border-b border-border px-5 py-4">
++              <h2 id="routine-clear-modal-title" className="text-xl font-semibold text-foreground">
++                Limpar rotina do mês?
++              </h2>
++            </div>
++
++            <div className="grid gap-3 px-5 py-4 text-sm text-muted-foreground">
++              <p>Todos os blocos do mês visível serão removidos do rascunho.</p>
++              <p>Você ainda poderá usar Desfazer logo após limpar.</p>
++            </div>
++
++            <div className="flex flex-col-reverse gap-3 border-t border-border bg-muted/20 px-5 py-4 sm:flex-row sm:justify-end">
++              <Button
++                type="button"
++                variant="outline"
++                className="min-h-11 w-full sm:w-auto"
++                onClick={() => setIsClearConfirmationOpen(false)}
++              >
++                Cancelar
++              </Button>
++              <Button
++                type="button"
++                variant="destructive"
++                className="min-h-11 w-full sm:w-auto"
++                onClick={confirmClearCurrentMonthRoutine}
++              >
++                Limpar mês
++              </Button>
++            </div>
++          </div>
++        </div>
++      ) : null}
++
++      {deleteConfirmation ? (
++        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/35 p-3 backdrop-blur-sm sm:items-center sm:p-4">
++          <div
++            className="w-full max-w-md overflow-hidden rounded-2xl border border-border bg-background shadow-2xl"
++            role="dialog"
++            aria-modal="true"
++            aria-labelledby="routine-delete-modal-title"
++          >
++            <div className="border-b border-border px-5 py-4">
++              <h2 id="routine-delete-modal-title" className="text-xl font-semibold text-foreground">
++                Excluir tarefa recorrente
++              </h2>
++            </div>
++
++            <div className="grid gap-3 px-5 py-4 text-sm text-muted-foreground">
++              <p>
++                <span className="font-medium text-foreground">{deleteConfirmation.title}</span> faz parte de uma repetição.
++              </p>
++              <p>Escolha se deseja remover somente este bloco ou todas as repetições da mesma série.</p>
++            </div>
++
++            <div className="grid gap-3 border-t border-border bg-muted/20 px-5 py-4">
++              <Button
++                type="button"
++                variant="outline"
++                className="min-h-11 w-full"
++                onClick={() => deleteSingleBlock(deleteConfirmation.blockId, deleteConfirmation.weekday)}
++              >
++                Apenas esta tarefa
++              </Button>
++              <Button
++                type="button"
++                variant="destructive"
++                className="min-h-11 w-full"
++                onClick={() =>
++                  deleteConfirmation.repeatSourceId
++                    ? deleteRecurringSeries(deleteConfirmation.repeatSourceId)
++                    : deleteSingleBlock(deleteConfirmation.blockId, deleteConfirmation.weekday)
++                }
++              >
++                Todas as repetições
++              </Button>
++              <Button
++                type="button"
++                variant="ghost"
++                className="min-h-11 w-full"
++                onClick={() => setDeleteConfirmation(null)}
++              >
++                Cancelar
++              </Button>
++            </div>
++          </div>
++        </div>
++      ) : null}
++
+       {dragPreview ? (
+         <div
+           className="pointer-events-none fixed z-[10000] rounded-full border border-border bg-background px-3 py-1 text-sm font-medium text-foreground shadow-2xl ring-1 ring-white/10"

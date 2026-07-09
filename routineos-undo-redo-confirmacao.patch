@@ -1,0 +1,363 @@
+diff --git a/src/features/routine-builder/components/routine-builder-view.tsx b/src/features/routine-builder/components/routine-builder-view.tsx
+index b2a930c..e20f61f 100644
+--- a/src/features/routine-builder/components/routine-builder-view.tsx
++++ b/src/features/routine-builder/components/routine-builder-view.tsx
+@@ -10,6 +10,7 @@ import {
+   Copy,
+   MoreHorizontal,
+   Pencil,
++  Redo2,
+   Save,
+   Trash2,
+   Undo2,
+@@ -83,7 +84,6 @@ interface DeleteConfirmationState {
+ interface RoutineToastState {
+   id: string
+   message: string
+-  undoRoutine?: Routine
+ }
+ 
+ function readDragPayload(event: DragEvent<HTMLElement>): DragPayload | null {
+@@ -440,6 +440,8 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+   const [deleteConfirmation, setDeleteConfirmation] = useState<DeleteConfirmationState | null>(null)
+   const [isClearConfirmationOpen, setIsClearConfirmationOpen] = useState(false)
+   const [toast, setToast] = useState<RoutineToastState | null>(null)
++  const [undoStack, setUndoStack] = useState<Routine[]>([])
++  const [redoStack, setRedoStack] = useState<Routine[]>([])
+   const [dragOverWeekday, setDragOverWeekday] = useState<Weekday | null>(null)
+   const [dragOverBlockId, setDragOverBlockId] = useState<string | null>(null)
+   const [draggingBlockId, setDraggingBlockId] = useState<string | null>(null)
+@@ -597,6 +599,45 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+     return draftWeek ? upsertRoutineWeek(baseRoutine, cloneRoutineWeek(draftWeek)) : baseRoutine
+   }
+ 
++  const cloneRoutineSnapshot = (snapshot: Routine): Routine => JSON.parse(JSON.stringify(snapshot)) as Routine
++
++  const applyRoutineSnapshot = (snapshot: Routine) => {
++    const nextSnapshot = cloneRoutineSnapshot(snapshot)
++
++    setDraftRoutine(nextSnapshot)
++    setDraftWeek(createRoutineWeekFromDate(selectedDateKey, nextSnapshot))
++    setIsSaved(JSON.stringify(nextSnapshot) === JSON.stringify(routine))
++  }
++
++  const pushUndoSnapshot = (snapshot: Routine = getRoutineWithCurrentDraftWeek()) => {
++    setUndoStack((current) => [...current, cloneRoutineSnapshot(snapshot)].slice(-30))
++    setRedoStack([])
++  }
++
++  const undoLastRoutineChange = () => {
++    if (undoStack.length === 0) return
++
++    const previousSnapshot = undoStack[undoStack.length - 1]
++    const currentSnapshot = getRoutineWithCurrentDraftWeek()
++
++    setUndoStack((current) => current.slice(0, -1))
++    setRedoStack((current) => [...current, cloneRoutineSnapshot(currentSnapshot)].slice(-30))
++    applyRoutineSnapshot(previousSnapshot)
++    showToast({ message: "Alteração desfeita." })
++  }
++
++  const redoRoutineChange = () => {
++    if (redoStack.length === 0) return
++
++    const nextSnapshot = redoStack[redoStack.length - 1]
++    const currentSnapshot = getRoutineWithCurrentDraftWeek()
++
++    setRedoStack((current) => current.slice(0, -1))
++    setUndoStack((current) => [...current, cloneRoutineSnapshot(currentSnapshot)].slice(-30))
++    applyRoutineSnapshot(nextSnapshot)
++    showToast({ message: "Alteração refeita." })
++  }
++
+   const showToast = (nextToast: Omit<RoutineToastState, "id">) => {
+     if (toastTimerRef.current !== null) {
+       window.clearTimeout(toastTimerRef.current)
+@@ -607,14 +648,7 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+     toastTimerRef.current = window.setTimeout(() => {
+       setToast(null)
+       toastTimerRef.current = null
+-    }, 4500)
+-  }
+-
+-  const restoreRoutineSnapshot = (snapshot: Routine) => {
+-    setDraftRoutine(snapshot)
+-    setDraftWeek(createRoutineWeekFromDate(selectedDateKey, snapshot))
+-    setIsSaved(JSON.stringify(snapshot) === JSON.stringify(routine))
+-    showToast({ message: "Ação desfeita." })
++    }, 3000)
+   }
+ 
+   const syncRecurringSeriesFromCurrentWeek = (routineToSync: Routine): Routine => {
+@@ -686,6 +720,9 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+ 
+   const updateDraftDay = (weekday: Weekday, updater: (day: RoutineDay) => RoutineDay) => {
+     if (!draftWeek) return
++
++    pushUndoSnapshot()
++
+     const nextWeek = updateRoutineWeekDay(draftWeek, weekday, (day) => {
+       const updatedDay = updater(day)
+       const normalizedBlocks = sortRoutineDayBlocksByTime(updatedDay.blocks, fallbackStartMinutes)
+@@ -785,6 +822,8 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+   const applyRepeatedBlock = (sourceBlock: RoutineBlock, targetDateKeys: string[]) => {
+     if (!editing || !draftWeek || targetDateKeys.length === 0) return
+ 
++    pushUndoSnapshot()
++
+     const repeatSourceId = sourceBlock.repeatSourceId ?? `repeat-${sourceBlock.id}`
+     const sourceDateKey = getDateKeyForWeekdayInWeek(draftWeek.weekStartDate, editing.weekday)
+ 
+@@ -892,21 +931,20 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+   }
+ 
+   const deleteSingleBlock = (blockId: string, weekday: Weekday) => {
+-    const previousRoutine = getRoutineWithCurrentDraftWeek()
+-
+     setOpenMenuBlockId(null)
+     updateDraftDay(weekday, (day) => ({
+       ...day,
+       blocks: day.blocks.filter((block) => block.id !== blockId),
+     }))
+     setDeleteConfirmation(null)
+-    showToast({ message: "Tarefa removida.", undoRoutine: previousRoutine })
++    showToast({ message: "Tarefa removida." })
+   }
+ 
+   const deleteRecurringSeries = (repeatSourceId: string) => {
+-    const previousRoutine = getRoutineWithCurrentDraftWeek()
+     const currentRoutine = getRoutineWithCurrentDraftWeek()
+ 
++    pushUndoSnapshot(currentRoutine)
++
+     const nextRoutine: Routine = {
+       ...currentRoutine,
+       weeks: currentRoutine.weeks?.map((week) => ({
+@@ -928,22 +966,17 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+     setOpenMenuBlockId(null)
+     setDeleteConfirmation(null)
+     setIsSaved(false)
+-    showToast({ message: "Repetições removidas.", undoRoutine: previousRoutine })
++    showToast({ message: "Repetições removidas." })
+   }
+ 
+   const requestDeleteBlock = (block: RoutineBlock, weekday: Weekday) => {
+-    if (block.repeatSourceId) {
+-      setOpenMenuBlockId(null)
+-      setDeleteConfirmation({
+-        blockId: block.id,
+-        weekday,
+-        title: block.title,
+-        repeatSourceId: block.repeatSourceId,
+-      })
+-      return
+-    }
+-
+-    deleteSingleBlock(block.id, weekday)
++    setOpenMenuBlockId(null)
++    setDeleteConfirmation({
++      blockId: block.id,
++      weekday,
++      title: block.title,
++      repeatSourceId: block.repeatSourceId,
++    })
+   }
+ 
+   const moveBlock = (blockId: string, direction: -1 | 1, weekday: Weekday) => {
+@@ -1057,7 +1090,8 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+   const moveBlockToDay = (sourceWeekday: Weekday, blockId: string, targetWeekday: Weekday, startMinutes: number) => {
+     if (!draftWeek) return
+ 
+-    const previousRoutine = getRoutineWithCurrentDraftWeek()
++    pushUndoSnapshot()
++
+     const sourceDay = getRoutineWeekDay(draftWeek, sourceWeekday)
+     const movedBlock = sourceDay.blocks.find((block) => block.id === blockId)
+ 
+@@ -1094,7 +1128,7 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+     setDraftWeek(withMovedBlock)
+     setOpenMenuBlockId(null)
+     setIsSaved(false)
+-    showToast({ message: "Bloco movido.", undoRoutine: previousRoutine })
++    showToast({ message: "Bloco movido." })
+   }
+ 
+   const getDraggedBlockDuration = (payload: DragPayload | null): number => {
+@@ -1329,6 +1363,8 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+     setDraftWeek(createRoutineWeekFromDate(selectedDateKey, nextRoutine))
+     saveRoutine(nextRoutine)
+     setIsSaved(true)
++    setUndoStack([])
++    setRedoStack([])
+     showToast({ message: "Rotina salva com sucesso." })
+   }
+ 
+@@ -1351,6 +1387,9 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+ 
+   const confirmClearCurrentMonthRoutine = () => {
+     const previousRoutine = getRoutineWithCurrentDraftWeek()
++
++    pushUndoSnapshot(previousRoutine)
++
+     const weekStartKeys = getVisibleMonthWeekStartKeys(
+       selectedDate.getFullYear(),
+       selectedDate.getMonth(),
+@@ -1375,7 +1414,7 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+     setEditing(null)
+     setIsClearConfirmationOpen(false)
+     setIsSaved(false)
+-    showToast({ message: "Rotina limpa.", undoRoutine: previousRoutine })
++    showToast({ message: "Rotina limpa." })
+   }
+ 
+   if (isLoading || !draftWeek || !selectedDay) {
+@@ -1659,6 +1698,34 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+             </div>
+ 
+             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
++              <div className="flex items-center gap-2">
++                <Button
++                  type="button"
++                  variant="outline"
++                  size="icon-lg"
++                  className="size-11 rounded-xl"
++                  onClick={undoLastRoutineChange}
++                  disabled={undoStack.length === 0}
++                  aria-label="Desfazer última alteração"
++                  title="Desfazer"
++                >
++                  <Undo2 className="size-4" />
++                </Button>
++
++                <Button
++                  type="button"
++                  variant="outline"
++                  size="icon-lg"
++                  className="size-11 rounded-xl"
++                  onClick={redoRoutineChange}
++                  disabled={redoStack.length === 0}
++                  aria-label="Refazer alteração"
++                  title="Refazer"
++                >
++                  <Redo2 className="size-4" />
++                </Button>
++              </div>
++
+               <Button
+                 type="button"
+                 variant="outline"
+@@ -1715,20 +1782,8 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+       </div>
+ 
+       {toast ? (
+-        <div className="fixed bottom-5 right-5 z-[10000] flex max-w-sm items-center gap-3 rounded-2xl border border-border bg-background px-4 py-3 text-sm text-foreground shadow-2xl ring-1 ring-white/10">
++        <div className="fixed bottom-5 right-5 z-[10000] flex max-w-sm items-center rounded-2xl border border-border bg-background px-4 py-3 text-sm text-foreground shadow-2xl ring-1 ring-white/10">
+           <span className="min-w-0 flex-1">{toast.message}</span>
+-          {toast.undoRoutine ? (
+-            <Button
+-              type="button"
+-              variant="ghost"
+-              size="sm"
+-              className="h-8 shrink-0 gap-1 px-2 text-xs"
+-              onClick={() => restoreRoutineSnapshot(toast.undoRoutine!)}
+-            >
+-              <Undo2 className="size-3.5" />
+-              Desfazer
+-            </Button>
+-          ) : null}
+         </div>
+       ) : null}
+ 
+@@ -1748,7 +1803,7 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+ 
+             <div className="grid gap-3 px-5 py-4 text-sm text-muted-foreground">
+               <p>Todos os blocos do mês visível serão removidos do rascunho.</p>
+-              <p>Você ainda poderá usar Desfazer logo após limpar.</p>
++              <p>Você poderá usar a seta de desfazer enquanto não salvar ou sair da página.</p>
+             </div>
+ 
+             <div className="flex flex-col-reverse gap-3 border-t border-border bg-muted/20 px-5 py-4 sm:flex-row sm:justify-end">
+@@ -1783,38 +1838,58 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+           >
+             <div className="border-b border-border px-5 py-4">
+               <h2 id="routine-delete-modal-title" className="text-xl font-semibold text-foreground">
+-                Excluir tarefa recorrente
++                {deleteConfirmation.repeatSourceId ? "Excluir tarefa recorrente" : "Excluir bloco?"}
+               </h2>
+             </div>
+ 
+             <div className="grid gap-3 px-5 py-4 text-sm text-muted-foreground">
+-              <p>
+-                <span className="font-medium text-foreground">{deleteConfirmation.title}</span> faz parte de uma repetição.
+-              </p>
+-              <p>Escolha se deseja remover somente este bloco ou todas as repetições da mesma série.</p>
++              {deleteConfirmation.repeatSourceId ? (
++                <>
++                  <p>
++                    <span className="font-medium text-foreground">{deleteConfirmation.title}</span> faz parte de uma repetição.
++                  </p>
++                  <p>Escolha se deseja remover somente este bloco ou todas as repetições da mesma série.</p>
++                </>
++              ) : (
++                <>
++                  <p>
++                    Deseja remover <span className="font-medium text-foreground">{deleteConfirmation.title}</span> da rotina?
++                  </p>
++                  <p>Você poderá usar a seta de desfazer enquanto não salvar ou sair da página.</p>
++                </>
++              )}
+             </div>
+ 
+             <div className="grid gap-3 border-t border-border bg-muted/20 px-5 py-4">
+-              <Button
+-                type="button"
+-                variant="outline"
+-                className="min-h-11 w-full"
+-                onClick={() => deleteSingleBlock(deleteConfirmation.blockId, deleteConfirmation.weekday)}
+-              >
+-                Apenas esta tarefa
+-              </Button>
+-              <Button
+-                type="button"
+-                variant="destructive"
+-                className="min-h-11 w-full"
+-                onClick={() =>
+-                  deleteConfirmation.repeatSourceId
+-                    ? deleteRecurringSeries(deleteConfirmation.repeatSourceId)
+-                    : deleteSingleBlock(deleteConfirmation.blockId, deleteConfirmation.weekday)
+-                }
+-              >
+-                Todas as repetições
+-              </Button>
++              {deleteConfirmation.repeatSourceId ? (
++                <>
++                  <Button
++                    type="button"
++                    variant="outline"
++                    className="min-h-11 w-full"
++                    onClick={() => deleteSingleBlock(deleteConfirmation.blockId, deleteConfirmation.weekday)}
++                  >
++                    Apenas esta tarefa
++                  </Button>
++                  <Button
++                    type="button"
++                    variant="destructive"
++                    className="min-h-11 w-full"
++                    onClick={() => deleteRecurringSeries(deleteConfirmation.repeatSourceId!)}
++                  >
++                    Todas as repetições
++                  </Button>
++                </>
++              ) : (
++                <Button
++                  type="button"
++                  variant="destructive"
++                  className="min-h-11 w-full"
++                  onClick={() => deleteSingleBlock(deleteConfirmation.blockId, deleteConfirmation.weekday)}
++                >
++                  Excluir bloco
++                </Button>
++              )}
+               <Button
+                 type="button"
+                 variant="ghost"

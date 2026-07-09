@@ -1,0 +1,290 @@
+diff --git a/src/features/routine-builder/components/routine-builder-view.tsx b/src/features/routine-builder/components/routine-builder-view.tsx
+index 26a0ceb..8b2158a 100644
+--- a/src/features/routine-builder/components/routine-builder-view.tsx
++++ b/src/features/routine-builder/components/routine-builder-view.tsx
+@@ -42,6 +42,7 @@ interface RoutineBuilderViewProps {
+ }
+ 
+ type EditingMode = "create" | "edit"
++type EditingRepeatMode = "none" | "week-daily" | "month-daily" | "month-weekday" | "year-weekday"
+ 
+ interface EditingState {
+   mode: EditingMode
+@@ -51,6 +52,7 @@ interface EditingState {
+   description: string
+   durationMinutes: number
+   startTime: string
++  repeatMode: EditingRepeatMode
+   blockId?: string
+ }
+ 
+@@ -155,6 +157,66 @@ function createBlockFromEditing(editing: EditingState): RoutineBlock {
+   }
+ }
+ 
++function getWeekdayIndex(weekday: Weekday): number {
++  return Math.max(0, WEEK_DAYS.findIndex((day) => day.key === weekday))
++}
++
++function getDateKeyForWeekdayInWeek(weekStartDate: string, weekday: Weekday): string {
++  const date = parseDateKey(weekStartDate)
++  date.setDate(date.getDate() + getWeekdayIndex(weekday))
++  return toDateKey(date)
++}
++
++function getWeekdayRepeatName(weekday: Weekday): string {
++  const labels: Record<Weekday, string> = {
++    sunday: "domingo",
++    monday: "segunda-feira",
++    tuesday: "terça-feira",
++    wednesday: "quarta-feira",
++    thursday: "quinta-feira",
++    friday: "sexta-feira",
++    saturday: "sábado",
++  }
++
++  return labels[weekday]
++}
++
++function getWeekdayRepeatPrefix(weekday: Weekday): string {
++  const prefix = weekday === "sunday" || weekday === "saturday" ? "Todo" : "Toda"
++  return `${prefix} ${getWeekdayRepeatName(weekday)}`
++}
++
++function getMonthDateKeys(year: number, month: number): string[] {
++  const keys: string[] = []
++  const cursor = new Date(year, month, 1)
++
++  while (cursor.getMonth() === month) {
++    keys.push(toDateKey(cursor))
++    cursor.setDate(cursor.getDate() + 1)
++  }
++
++  return keys
++}
++
++function getYearWeekdayDateKeys(startDateKey: string, weekday: Weekday): string[] {
++  const startDate = parseDateKey(startDateKey)
++  const cursor = new Date(startDate)
++  const endDate = new Date(startDate.getFullYear(), 11, 31)
++
++  while (getWeekdayFromDateKey(toDateKey(cursor)) !== weekday) {
++    cursor.setDate(cursor.getDate() + 1)
++  }
++
++  const keys: string[] = []
++
++  while (cursor <= endDate) {
++    keys.push(toDateKey(cursor))
++    cursor.setDate(cursor.getDate() + 7)
++  }
++
++  return keys
++}
++
+ const HOUR_ROW_HEIGHT = 144
+ const SNAP_THRESHOLD_MINUTES = 5
+ const TIMELINE_HEADER_HEIGHT = 64
+@@ -491,6 +553,7 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+       description: "",
+       durationMinutes: defaults.durationMinutes,
+       startTime: formatTimeLabel(clampMinutes(startMinutes)),
++      repeatMode: "none",
+     })
+   }
+ 
+@@ -504,6 +567,7 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+       description: block.description ?? "",
+       durationMinutes: block.durationMinutes,
+       startTime: block.startTime,
++      repeatMode: "none",
+       blockId: block.id,
+     })
+   }
+@@ -528,6 +592,69 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+     )
+   }
+ 
++  const getRepeatTargetDateKeys = (editingState: EditingState): string[] => {
++    if (!draftWeek || editingState.repeatMode === "none") return []
++
++    const sourceDateKey = getDateKeyForWeekdayInWeek(draftWeek.weekStartDate, editingState.weekday)
++    const sourceDate = parseDateKey(sourceDateKey)
++
++    if (editingState.repeatMode === "week-daily") {
++      return WEEK_DAYS.map((day) => getDateKeyForWeekdayInWeek(draftWeek.weekStartDate, day.key))
++    }
++
++    if (editingState.repeatMode === "month-daily") {
++      return getMonthDateKeys(selectedDate.getFullYear(), selectedDate.getMonth())
++    }
++
++    if (editingState.repeatMode === "month-weekday") {
++      return getMonthDateKeys(selectedDate.getFullYear(), selectedDate.getMonth()).filter(
++        (dateKey) => getWeekdayFromDateKey(dateKey) === editingState.weekday,
++      )
++    }
++
++    if (editingState.repeatMode === "year-weekday") {
++      return getYearWeekdayDateKeys(sourceDateKey, editingState.weekday)
++    }
++
++    return [toDateKey(sourceDate)]
++  }
++
++  const applyRepeatedBlock = (sourceBlock: RoutineBlock, targetDateKeys: string[]) => {
++    if (!editing || !draftWeek || targetDateKeys.length === 0) return
++
++    const repeatSourceId = sourceBlock.repeatSourceId ?? `repeat-${sourceBlock.id}`
++    const sourceDateKey = getDateKeyForWeekdayInWeek(draftWeek.weekStartDate, editing.weekday)
++
++    const nextRoutine = targetDateKeys.reduce((currentRoutine, dateKey) => {
++      const targetWeekday = getWeekdayFromDateKey(dateKey)
++      const targetWeek = createRoutineWeekFromDate(dateKey, currentRoutine)
++      const targetBlock: RoutineBlock = {
++        ...sourceBlock,
++        id: dateKey === sourceDateKey ? sourceBlock.id : createId(`block-${targetWeekday}`),
++        repeatSourceId,
++      }
++
++      const updatedWeek = updateRoutineWeekDay(targetWeek, targetWeekday, (day) => {
++        const blocks = day.blocks.filter(
++          (block) => block.id !== sourceBlock.id && block.repeatSourceId !== repeatSourceId,
++        )
++        const normalizedBlocks = sortRoutineDayBlocksByTime([...blocks, targetBlock], fallbackStartMinutes)
++
++        return {
++          ...day,
++          blocks: normalizedBlocks,
++          isActive: normalizedBlocks.length > 0,
++        }
++      })
++
++      return upsertRoutineWeek(currentRoutine, updatedWeek)
++    }, getRoutineWithCurrentDraftWeek())
++
++    setDraftRoutine(nextRoutine)
++    setDraftWeek(createRoutineWeekFromDate(selectedDateKey, nextRoutine))
++    setIsSaved(false)
++  }
++
+   const handleSaveBlock = () => {
+     if (!editing) return
+ 
+@@ -535,27 +662,47 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+     const normalizedDuration = Math.max(1, Math.floor(editing.durationMinutes || 1))
+     const normalizedDescription = editing.description.trim() || undefined
+ 
+-    updateDraftDay(editing.weekday, (day) => {
+-      if (editing.mode === "edit") {
+-        return {
+-          ...day,
+-          blocks: day.blocks.map((block) =>
+-            block.id === editing.blockId
+-              ? setBlockStartTime(
+-                  {
+-                    ...block,
+-                    type: editing.type,
+-                    title: editing.title.trim() || getBuilderBlockOption(editing.type).defaultTitle,
+-                    description: normalizedDescription,
+-                    durationMinutes: normalizedDuration,
+-                  },
+-                  startMinutes,
+-                )
+-              : block,
+-          ),
+-        }
++    if (editing.mode === "edit") {
++      const currentDay = draftWeek ? getRoutineWeekDay(draftWeek, editing.weekday) : null
++      const currentBlock = currentDay?.blocks.find((block) => block.id === editing.blockId)
++
++      if (!currentBlock) {
++        closeEditing()
++        return
+       }
+ 
++      const repeatSourceId =
++        editing.repeatMode === "none"
++          ? currentBlock.repeatSourceId
++          : currentBlock.repeatSourceId ?? `repeat-${currentBlock.id}`
++      const updatedBlock = setBlockStartTime(
++        {
++          ...currentBlock,
++          type: editing.type,
++          title: editing.title.trim() || getBuilderBlockOption(editing.type).defaultTitle,
++          description: normalizedDescription,
++          durationMinutes: normalizedDuration,
++          repeatSourceId,
++        },
++        startMinutes,
++      )
++
++      if (editing.repeatMode !== "none") {
++        applyRepeatedBlock(updatedBlock, getRepeatTargetDateKeys(editing))
++        closeEditing()
++        return
++      }
++
++      updateDraftDay(editing.weekday, (day) => ({
++        ...day,
++        blocks: day.blocks.map((block) => (block.id === editing.blockId ? updatedBlock : block)),
++      }))
++
++      closeEditing()
++      return
++    }
++
++    updateDraftDay(editing.weekday, (day) => {
+       const block = setBlockStartTime(createBlockFromEditing(editing), startMinutes)
+       return {
+         ...day,
+@@ -1487,6 +1634,37 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+                   />
+                 </div>
+               )}
++
++              {editing.mode === "edit" ? (
++                <div className="grid gap-3">
++                  <Label htmlFor="routine-block-repeat">Repetir tarefa</Label>
++                  <select
++                    id="routine-block-repeat"
++                    className="h-12 w-full rounded-xl border border-input bg-background px-3 text-base text-foreground shadow-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 sm:h-14 sm:px-4"
++                    value={editing.repeatMode}
++                    onChange={(event) =>
++                      setEditing((current) =>
++                        current
++                          ? {
++                              ...current,
++                              repeatMode: event.target.value as EditingRepeatMode,
++                            }
++                          : current,
++                      )
++                    }
++                  >
++                    <option value="none">Não repetir</option>
++                    <option value="week-daily">Todos os dias desta semana</option>
++                    <option value="month-daily">Todos os dias deste mês</option>
++                    <option value="month-weekday">
++                      {getWeekdayRepeatPrefix(editing.weekday)} deste mês
++                    </option>
++                    <option value="year-weekday">
++                      {getWeekdayRepeatPrefix(editing.weekday)} até o fim do ano
++                    </option>
++                  </select>
++                </div>
++              ) : null}
+             </div>
+ 
+             <div className="flex flex-col-reverse gap-3 border-t border-border bg-muted/20 px-4 py-4 sm:flex-row sm:justify-end sm:px-6">
+diff --git a/src/types/study.ts b/src/types/study.ts
+index 7bee3a1..c5fba1d 100644
+--- a/src/types/study.ts
++++ b/src/types/study.ts
+@@ -27,6 +27,7 @@ export interface RoutineBlock {
+   id: string
+   type: RoutineBlockType
+   subjectId?: string
++  repeatSourceId?: string
+   title: string
+   description?: string
+   startTime: string

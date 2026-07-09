@@ -152,10 +152,91 @@
 }
 
 @layer components {
-  .routine-builder-workspace-grid {
-    min-width: 1430px;
-    grid-template-columns: 44px repeat(7, minmax(180px, 1fr)) 44px;
-    gap: 0.75rem;
+  .routine-builder-scheduler-grid {
+    min-width: 1240px;
+    display: grid;
+    grid-template-columns: 76px repeat(7, minmax(152px, 1fr));
+    grid-template-rows: 64px var(--routine-builder-timeline-height);
+    column-gap: 0.5rem;
+    row-gap: 0.75rem;
+    align-items: stretch;
+  }
+
+  .routine-builder-day-header {
+    display: flex;
+    min-height: 4rem;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid color-mix(in oklch, var(--border) 55%, transparent);
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    background: color-mix(in oklch, var(--background) 95%, transparent);
+    box-shadow: 0 18px 45px color-mix(in oklch, var(--foreground) 6%, transparent);
+    backdrop-filter: blur(14px);
+  }
+
+  .routine-builder-day-header {
+    gap: 0.25rem;
+    border-radius: 1.25rem;
+  }
+
+  .routine-builder-day-header-today {
+    border-color: rgb(34 211 238 / 0.78);
+    background: rgb(34 211 238 / 0.08);
+    box-shadow: 0 18px 45px rgb(34 211 238 / 0.12);
+  }
+
+  .routine-builder-time-column,
+  .routine-builder-day-lane {
+    position: relative;
+    min-height: var(--routine-builder-timeline-height);
+  }
+
+  .routine-builder-time-column {
+    border-radius: 1.5rem;
+    border: 1px solid color-mix(in oklch, var(--border) 35%, transparent);
+    background: color-mix(in oklch, var(--background) 70%, transparent);
+    box-shadow: 0 18px 45px color-mix(in oklch, var(--foreground) 4%, transparent);
+  }
+
+  .routine-builder-time-label {
+    position: absolute;
+    left: 0;
+    right: 0;
+    text-align: center;
+    transform: translateY(-50%);
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    color: var(--muted-foreground);
+    white-space: nowrap;
+  }
+
+  .routine-builder-day-lane {
+    border-radius: 1.5rem;
+    transition: background-color 160ms ease, box-shadow 160ms ease;
+  }
+
+  .routine-builder-day-lane-active {
+    background: color-mix(in oklch, var(--primary) 4%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--primary) 25%, transparent);
+  }
+
+  .routine-builder-hour-line {
+    position: absolute;
+    left: 0;
+    right: 0;
+    border-top: 1px solid color-mix(in oklch, var(--border) 46%, transparent);
+  }
+
+
+  .routine-builder-schedule-block {
+    position: absolute;
+    left: 0.55rem;
+    right: 0.55rem;
+    z-index: 3;
+    overflow: visible;
   }
 
   .routine-builder-block-panel {
@@ -163,21 +244,68 @@
   }
 
   @media (min-width: 640px) {
-    .routine-builder-workspace-grid {
-      min-width: 1500px;
-      grid-template-columns: 48px repeat(7, minmax(190px, 1fr)) 48px;
+    .routine-builder-scheduler-grid {
+      min-width: 1240px;
+      grid-template-columns: 76px repeat(7, minmax(152px, 1fr));
+      grid-template-rows: 64px var(--routine-builder-timeline-height);
+      column-gap: 0.5rem;
+      row-gap: 0.75rem;
     }
   }
 
   @media (min-width: 1440px) {
-    .routine-builder-workspace-grid {
+    .routine-builder-scheduler-grid {
       min-width: 0;
-      grid-template-columns: 48px repeat(7, minmax(0, 1fr)) 48px;
-      gap: 1rem;
+      grid-template-columns: 76px repeat(7, minmax(0, 1fr));
+      grid-template-rows: 64px var(--routine-builder-timeline-height);
+      column-gap: 0.75rem;
+      row-gap: 0.75rem;
     }
 
     .routine-builder-block-panel {
       display: block;
     }
+  }
+}
+
+
+
+
+@keyframes routine-builder-panel-hint-pull {
+  0%,
+  58%,
+  100% {
+    transform: translateX(0);
+  }
+
+  66% {
+    transform: translateX(-8px);
+  }
+
+  72% {
+    transform: translateX(5px);
+  }
+
+  78% {
+    transform: translateX(-3px);
+  }
+
+  84% {
+    transform: translateX(2px);
+  }
+
+  90% {
+    transform: translateX(0);
+  }
+}
+
+.routine-builder-panel-hint-motion {
+  animation: routine-builder-panel-hint-pull 2.8s cubic-bezier(0.34, 1.56, 0.64, 1) infinite;
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .routine-builder-panel-hint-motion {
+    animation: none;
   }
 }
