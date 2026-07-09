@@ -1,0 +1,646 @@
+diff --git a/src/app/api/resource-metadata/route.ts b/src/app/api/resource-metadata/route.ts
+index 9d1bfb1..714d3ee 100644
+--- a/src/app/api/resource-metadata/route.ts
++++ b/src/app/api/resource-metadata/route.ts
+@@ -72,8 +72,32 @@ function extractPlatformFromHtml(html: string): string | null {
+   return candidates.find((item) => item && item.length >= 2 && item.length <= 80) ?? null
+ }
+ 
++const PLATFORM_HOSTNAME_ALIASES: Array<{ hostname: string; label: string }> = [
++  { hostname: "alura.com.br", label: "Alura" },
++  { hostname: "youtube.com", label: "YouTube" },
++  { hostname: "youtu.be", label: "YouTube" },
++  { hostname: "udemy.com", label: "Udemy" },
++  { hostname: "coursera.org", label: "Coursera" },
++  { hostname: "edx.org", label: "edX" },
++  { hostname: "rocketseat.com.br", label: "Rocketseat" },
++  { hostname: "dio.me", label: "DIO" },
++  { hostname: "freecodecamp.org", label: "freeCodeCamp" },
++  { hostname: "cursoemvideo.com", label: "Curso em Vídeo" },
++  { hostname: "web.dev", label: "web.dev" },
++  { hostname: "figma.com", label: "Figma" },
++]
++
++function getFriendlyPlatformFromHostname(hostname: string): string | null {
++  const normalized = hostname.toLowerCase().replace(/^www\./, "")
++  const alias = PLATFORM_HOSTNAME_ALIASES.find(
++    (item) => normalized === item.hostname || normalized.endsWith(`.${item.hostname}`),
++  )
++
++  return alias?.label ?? null
++}
++
+ function getDomainFallback(url: URL): string {
+-  return url.hostname.replace(/^www\./, "")
++  return getFriendlyPlatformFromHostname(url.hostname) ?? url.hostname.replace(/^www\./, "")
+ }
+ 
+ export async function POST(request: NextRequest) {
+@@ -96,6 +120,7 @@ export async function POST(request: NextRequest) {
+   }
+ 
+   const fallback = getDomainFallback(parsedUrl)
++  const hostnameAlias = getFriendlyPlatformFromHostname(parsedUrl.hostname)
+   const controller = new AbortController()
+   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
+ 
+@@ -117,8 +142,10 @@ export async function POST(request: NextRequest) {
+ 
+     const html = (await response.text()).slice(0, MAX_HTML_CHARS)
+     const platform = extractPlatformFromHtml(html)
++    const resolvedPlatform = hostnameAlias ?? platform ?? fallback
++    const source = hostnameAlias ? "domain-alias" : platform ? "metadata" : "domain"
+ 
+-    return NextResponse.json({ platform: platform ?? fallback, source: platform ? "metadata" : "domain" })
++    return NextResponse.json({ platform: resolvedPlatform, source })
+   } catch {
+     return NextResponse.json({ platform: fallback, source: "domain" })
+   } finally {
+diff --git a/src/features/mentor/server/mentor-prompts.ts b/src/features/mentor/server/mentor-prompts.ts
+index 05233e0..8372cd8 100644
+--- a/src/features/mentor/server/mentor-prompts.ts
++++ b/src/features/mentor/server/mentor-prompts.ts
+@@ -5,7 +5,7 @@ export const MENTOR_SYSTEM_PROMPT = [
+   "Use o contexto do aplicativo para ajudar o usuário a estudar melhor, ajustar sua rotina, sugerir projetos, explicar conceitos e orientar próximos passos.",
+   "Quando o usuário perguntar o que você pode fazer, explique que você pode analisar rotina, acompanhar progresso, sugerir caminhos de estudo, tirar dúvidas, recomendar práticas e orientar o uso da área Trilhas.",
+   "A área Trilhas do RoutineOS transforma a rotina salva em caminhos de estudo com plataformas gratuitas, documentações, canais e práticas. Se o usuário quiser gerar ou salvar uma trilha, oriente-o a abrir a tela Trilhas.",
+-  "Use as marcações da trilha como contexto real de aprendizagem: recursos favoritos indicam prioridade, recursos estudados indicam o que o usuário já viu e já praticou, recursos ocultados não devem ser recomendados novamente, e cursos adicionados pelo usuário indicam materiais pessoais que ele está seguindo.",
++  "Use as marcações da trilha como contexto real de aprendizagem: recursos e cursos favoritos indicam prioridade, recursos estudados e cursos concluídos indicam o que o usuário já viu e já praticou, recursos ocultados não devem ser recomendados novamente, e cursos adicionados pelo usuário indicam materiais pessoais que ele está seguindo.",
+   "Não transforme essas marcações em porcentagens ou progresso visual. Use-as para orientar revisão, próximos passos, lacunas e recomendações mais úteis.",
+   "Não invente dados que não estejam no contexto. Quando não souber algo, pergunte ao usuário.",
+   "Responda em português do Brasil. Seja claro, útil e evite respostas longas demais quando o usuário não pedir.",
+diff --git a/src/features/mentor/types.ts b/src/features/mentor/types.ts
+index 214266e..cb9ac5b 100644
+--- a/src/features/mentor/types.ts
++++ b/src/features/mentor/types.ts
+@@ -60,6 +60,9 @@ export interface MentorContextTrailUserCourseSignal {
+   title: string
+   url: string
+   platform: string
++  isFavorite: boolean
++  isCompleted: boolean
++  completedAt: string | null
+ }
+ 
+ export interface MentorContextTrailTopicSignal {
+@@ -179,6 +182,10 @@ export interface StudyTrailUserCourse {
+   url: string
+   platform: string
+   createdAt: string
++  updatedAt?: string
++  isFavorite?: boolean
++  isCompleted?: boolean
++  completedAt?: string | null
+ }
+ 
+ export interface StudyTrailTopic {
+diff --git a/src/features/mentor/utils/mentor-context.ts b/src/features/mentor/utils/mentor-context.ts
+index 2bc7848..c1b32a1 100644
+--- a/src/features/mentor/utils/mentor-context.ts
++++ b/src/features/mentor/utils/mentor-context.ts
+@@ -208,6 +208,9 @@ function summarizeStudyTrail(): MentorContext["studyTrail"] {
+           title: course.title,
+           url: course.url,
+           platform: course.platform,
++          isFavorite: course.isFavorite === true,
++          isCompleted: course.isCompleted === true,
++          completedAt: course.completedAt ?? null,
+         })),
+       }
+     }),
+diff --git a/src/features/trails/components/trails-view.tsx b/src/features/trails/components/trails-view.tsx
+index e9b2577..b1e31ee 100644
+--- a/src/features/trails/components/trails-view.tsx
++++ b/src/features/trails/components/trails-view.tsx
+@@ -1,7 +1,7 @@
+ "use client"
+ 
+ import { FormEvent, useEffect, useMemo, useState } from "react"
+-import { BookOpen, Check, Loader2, Plus, Search, Star, Trash2 } from "lucide-react"
++import { BookOpen, Check, Loader2, Pencil, Plus, Search, Star, Trash2 } from "lucide-react"
+ import { PageHeading } from "@/components/shared/page-heading"
+ import { Button } from "@/components/ui/button"
+ import { Card, CardContent } from "@/components/ui/card"
+@@ -69,14 +69,50 @@ function normalizeCourseUrl(value: string): string {
+   return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`
+ }
+ 
++const COURSE_PLATFORM_ALIASES: Array<{ hostname: string; label: string }> = [
++  { hostname: "alura.com.br", label: "Alura" },
++  { hostname: "youtube.com", label: "YouTube" },
++  { hostname: "youtu.be", label: "YouTube" },
++  { hostname: "udemy.com", label: "Udemy" },
++  { hostname: "coursera.org", label: "Coursera" },
++  { hostname: "edx.org", label: "edX" },
++  { hostname: "rocketseat.com.br", label: "Rocketseat" },
++  { hostname: "dio.me", label: "DIO" },
++  { hostname: "freecodecamp.org", label: "freeCodeCamp" },
++  { hostname: "cursoemvideo.com", label: "Curso em Vídeo" },
++  { hostname: "web.dev", label: "web.dev" },
++  { hostname: "figma.com", label: "Figma" },
++]
++
++function getFriendlyPlatformLabel(value: string): string | null {
++  const normalized = value
++    .trim()
++    .toLowerCase()
++    .replace(/^https?:\/\//, "")
++    .replace(/^www\./, "")
++    .split(/[/?#]/)[0]
++
++  const alias = COURSE_PLATFORM_ALIASES.find(
++    (item) => normalized === item.hostname || normalized.endsWith(`.${item.hostname}`),
++  )
++
++  return alias?.label ?? null
++}
++
+ function getUrlFallbackLabel(url: string): string {
+   try {
+-    return new URL(url).hostname.replace(/^www\./, "")
++    const hostname = new URL(url).hostname.replace(/^www\./, "")
++    return getFriendlyPlatformLabel(hostname) ?? hostname
+   } catch {
+-    return url
++    return getFriendlyPlatformLabel(url) ?? url
+   }
+ }
+ 
++function getCoursePlatformLabel(course: StudyTrailUserCourse): string {
++  const platform = course.platform?.trim()
++  return getFriendlyPlatformLabel(platform || "") ?? platform || getUrlFallbackLabel(course.url)
++}
++
+ function TrailsEmptyState({ onGenerate, isGenerating }: { onGenerate: () => void; isGenerating: boolean }) {
+   return (
+     <Card className="border-dashed">
+@@ -263,18 +299,21 @@ function ResourceLinkList({
+   )
+ }
+ 
+-function AddCourseDialog({
++function CourseDialog({
+   topic,
+-  onAddCourse,
++  course,
++  onSaveCourse,
+ }: {
+   topic: StudyTrailTopic
+-  onAddCourse: (topicId: string, course: StudyTrailUserCourse) => void
++  course?: StudyTrailUserCourse
++  onSaveCourse: (topicId: string, course: StudyTrailUserCourse) => void
+ }) {
+   const [open, setOpen] = useState(false)
+   const [title, setTitle] = useState("")
+   const [url, setUrl] = useState("")
+   const [error, setError] = useState<string | null>(null)
+   const [isSaving, setIsSaving] = useState(false)
++  const isEditing = Boolean(course)
+ 
+   const resetForm = () => {
+     setTitle("")
+@@ -283,11 +322,40 @@ function AddCourseDialog({
+     setIsSaving(false)
+   }
+ 
++  const openDialog = () => {
++    setTitle(course?.title ?? "")
++    setUrl(course?.url ?? "")
++    setError(null)
++    setIsSaving(false)
++    setOpen(true)
++  }
++
+   const handleOpenChange = (nextOpen: boolean) => {
+     setOpen(nextOpen)
+     if (!nextOpen) resetForm()
+   }
+ 
++  const resolvePlatform = async (normalizedUrl: string): Promise<string> => {
++    try {
++      const response = await fetch("/api/resource-metadata", {
++        method: "POST",
++        headers: { "Content-Type": "application/json" },
++        body: JSON.stringify({ url: normalizedUrl }),
++      })
++      const payload = (await response.json().catch(() => null)) as { platform?: string } | null
++
++      if (!response.ok) {
++        return getUrlFallbackLabel(normalizedUrl)
++      }
++
++      return typeof payload?.platform === "string" && payload.platform.trim().length > 0
++        ? payload.platform.trim()
++        : getUrlFallbackLabel(normalizedUrl)
++    } catch {
++      return getUrlFallbackLabel(normalizedUrl)
++    }
++  }
++
+   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+     event.preventDefault()
+     if (isSaving) return
+@@ -316,56 +384,57 @@ function AddCourseDialog({
+     setIsSaving(true)
+     setError(null)
+ 
+-    try {
+-      const response = await fetch("/api/resource-metadata", {
+-        method: "POST",
+-        headers: { "Content-Type": "application/json" },
+-        body: JSON.stringify({ url: normalizedUrl }),
+-      })
+-      const payload = (await response.json().catch(() => null)) as { platform?: string } | null
+-      const platform = typeof payload?.platform === "string" && payload.platform.trim().length > 0
+-        ? payload.platform.trim()
+-        : getUrlFallbackLabel(normalizedUrl)
+-
+-      onAddCourse(topic.id, {
+-        id: createCourseId(),
+-        title: trimmedTitle,
+-        url: normalizedUrl,
+-        platform,
+-        createdAt: new Date().toISOString(),
+-      })
+-      handleOpenChange(false)
+-    } catch {
+-      onAddCourse(topic.id, {
+-        id: createCourseId(),
+-        title: trimmedTitle,
+-        url: normalizedUrl,
+-        platform: getUrlFallbackLabel(normalizedUrl),
+-        createdAt: new Date().toISOString(),
+-      })
+-      handleOpenChange(false)
+-    } finally {
+-      setIsSaving(false)
+-    }
++    const now = new Date().toISOString()
++    const shouldResolvePlatform = !course || course.url !== normalizedUrl || !course.platform
++    const platform = shouldResolvePlatform ? await resolvePlatform(normalizedUrl) : course.platform
++
++    onSaveCourse(topic.id, {
++      id: course?.id ?? createCourseId(),
++      title: trimmedTitle,
++      url: normalizedUrl,
++      platform,
++      createdAt: course?.createdAt ?? now,
++      updatedAt: isEditing ? now : undefined,
++      isFavorite: course?.isFavorite === true,
++      isCompleted: course?.isCompleted === true,
++      completedAt: course?.completedAt ?? null,
++    })
++    handleOpenChange(false)
+   }
+ 
+   return (
+     <Dialog open={open} onOpenChange={handleOpenChange}>
+-      <Button type="button" variant="outline" className="min-h-10 w-full" onClick={() => setOpen(true)}>
+-        <Plus className="size-4" aria-hidden="true" />
+-        Adicionar curso
+-      </Button>
++      {isEditing ? (
++        <Button
++          type="button"
++          variant="ghost"
++          size="icon-sm"
++          className="text-muted-foreground"
++          onClick={openDialog}
++          aria-label="Editar curso"
++          title="Editar curso"
++        >
++          <Pencil className="size-4" aria-hidden="true" />
++        </Button>
++      ) : (
++        <Button type="button" variant="outline" className="min-h-10 w-full" onClick={openDialog}>
++          <Plus className="size-4" aria-hidden="true" />
++          Adicionar curso
++        </Button>
++      )}
+ 
+       <DialogContent className="sm:max-w-md">
+         <DialogHeader className="pr-8">
+-          <DialogTitle className="wrap-break-word text-xl">Adicionar curso em {topic.title}</DialogTitle>
++          <DialogTitle className="wrap-break-word text-xl">
++            {isEditing ? `Editar curso em ${topic.title}` : `Adicionar curso em ${topic.title}`}
++          </DialogTitle>
+         </DialogHeader>
+ 
+         <form className="space-y-4" onSubmit={handleSubmit}>
+           <div className="space-y-2">
+-            <Label htmlFor={`course-title-${topic.id}`}>Nome do curso</Label>
++            <Label htmlFor={`course-title-${topic.id}-${course?.id ?? "new"}`}>Nome do curso</Label>
+             <Input
+-              id={`course-title-${topic.id}`}
++              id={`course-title-${topic.id}-${course?.id ?? "new"}`}
+               value={title}
+               onChange={(event) => setTitle(event.target.value)}
+               placeholder="Ex: Curso de Linux para iniciantes"
+@@ -374,9 +443,9 @@ function AddCourseDialog({
+           </div>
+ 
+           <div className="space-y-2">
+-            <Label htmlFor={`course-url-${topic.id}`}>URL</Label>
++            <Label htmlFor={`course-url-${topic.id}-${course?.id ?? "new"}`}>URL</Label>
+             <Input
+-              id={`course-url-${topic.id}`}
++              id={`course-url-${topic.id}-${course?.id ?? "new"}`}
+               value={url}
+               onChange={(event) => setUrl(event.target.value)}
+               placeholder="https://..."
+@@ -389,7 +458,7 @@ function AddCourseDialog({
+           <div className="flex justify-end pt-1">
+             <Button type="submit" disabled={isSaving} className="min-h-10">
+               {isSaving ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : null}
+-              Salvar
++              {isEditing ? "Salvar alterações" : "Salvar"}
+             </Button>
+           </div>
+         </form>
+@@ -401,10 +470,16 @@ function AddCourseDialog({
+ function UserCourseList({
+   topic,
+   onAddCourse,
++  onUpdateCourse,
++  onToggleCourseFavorite,
++  onToggleCourseCompleted,
+   onDeleteCourse,
+ }: {
+   topic: StudyTrailTopic
+   onAddCourse: (topicId: string, course: StudyTrailUserCourse) => void
++  onUpdateCourse: (topicId: string, course: StudyTrailUserCourse) => void
++  onToggleCourseFavorite: (topicId: string, courseId: string) => void
++  onToggleCourseCompleted: (topicId: string, courseId: string) => void
+   onDeleteCourse: (topicId: string, courseId: string, courseTitle: string, topicTitle: string) => void
+ }) {
+   const courses = topic.userCourses ?? []
+@@ -418,44 +493,79 @@ function UserCourseList({
+         </p>
+       </div>
+ 
+-      <AddCourseDialog topic={topic} onAddCourse={onAddCourse} />
++      <CourseDialog topic={topic} onSaveCourse={onAddCourse} />
+ 
+       {courses.length > 0 ? (
+         <div className="grid gap-2">
+-          {courses.map((course) => (
+-            <div
+-              key={course.id}
+-              className="group rounded-xl border border-border/70 bg-background/75 px-3 py-2 transition-colors hover:bg-muted"
+-            >
+-              <div className="flex min-w-0 items-start justify-between gap-2">
+-                <a
+-                  href={course.url}
+-                  target="_blank"
+-                  rel="noreferrer"
+-                  className="min-w-0 flex-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+-                >
+-                  <span className="wrap-break-word block text-sm font-medium text-foreground group-hover:text-primary">
+-                    {course.title}
+-                  </span>
+-                  <span className="wrap-break-word block text-sm leading-6 text-muted-foreground">
+-                    {course.platform || getUrlFallbackLabel(course.url)}
+-                  </span>
+-                </a>
++          {courses.map((course) => {
++            const isFavorite = course.isFavorite === true
++            const isCompleted = course.isCompleted === true
+ 
+-                <Button
+-                  type="button"
+-                  variant="ghost"
+-                  size="icon-sm"
+-                  className="shrink-0 text-muted-foreground hover:text-destructive"
+-                  onClick={() => onDeleteCourse(topic.id, course.id, course.title, topic.title)}
+-                  aria-label="Excluir curso"
+-                  title="Excluir curso"
+-                >
+-                  <Trash2 className="size-4" aria-hidden="true" />
+-                </Button>
++            return (
++              <div
++                key={course.id}
++                className={cn(
++                  "group rounded-xl border border-border/70 bg-background/75 px-3 py-2 transition-colors hover:bg-muted",
++                  isCompleted ? "opacity-80" : "",
++                )}
++              >
++                <div className="flex min-w-0 items-start justify-between gap-2">
++                  <a
++                    href={course.url}
++                    target="_blank"
++                    rel="noreferrer"
++                    className="min-w-0 flex-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
++                  >
++                    <span className="wrap-break-word block text-sm font-medium text-foreground group-hover:text-primary">
++                      {course.title}
++                    </span>
++                    <span className="wrap-break-word block text-sm leading-6 text-muted-foreground">
++                      {getCoursePlatformLabel(course)}
++                    </span>
++                  </a>
++
++                  <div className="flex shrink-0 items-center gap-1">
++                    <Button
++                      type="button"
++                      variant="ghost"
++                      size="icon-sm"
++                      className={cn(isFavorite ? "text-primary" : "text-muted-foreground")}
++                      onClick={() => onToggleCourseFavorite(topic.id, course.id)}
++                      aria-pressed={isFavorite}
++                      aria-label={isFavorite ? "Remover curso dos favoritos" : "Favoritar curso"}
++                      title={isFavorite ? "Remover curso dos favoritos" : "Favoritar curso"}
++                    >
++                      <Star className={cn("size-4", isFavorite ? "fill-current" : "")} aria-hidden="true" />
++                    </Button>
++                    <Button
++                      type="button"
++                      variant="ghost"
++                      size="icon-sm"
++                      className={cn(isCompleted ? "text-primary" : "text-muted-foreground")}
++                      onClick={() => onToggleCourseCompleted(topic.id, course.id)}
++                      aria-pressed={isCompleted}
++                      aria-label={isCompleted ? "Marcar curso como não concluído" : "Marcar curso como concluído"}
++                      title={isCompleted ? "Marcar curso como não concluído" : "Marcar curso como concluído"}
++                    >
++                      <Check className="size-4" aria-hidden="true" />
++                    </Button>
++                    <CourseDialog topic={topic} course={course} onSaveCourse={onUpdateCourse} />
++                    <Button
++                      type="button"
++                      variant="ghost"
++                      size="icon-sm"
++                      className="text-muted-foreground hover:text-destructive"
++                      onClick={() => onDeleteCourse(topic.id, course.id, course.title, topic.title)}
++                      aria-label="Excluir curso"
++                      title="Excluir curso"
++                    >
++                      <Trash2 className="size-4" aria-hidden="true" />
++                    </Button>
++                  </div>
++                </div>
+               </div>
+-            </div>
+-          ))}
++            )
++          })}
+         </div>
+       ) : (
+         <p className="wrap-break-word rounded-xl border border-dashed border-border/70 px-3 py-3 text-sm leading-6 text-muted-foreground">
+@@ -474,6 +584,9 @@ function TopicDetails({
+   onToggleResourceStudied,
+   onDeleteResource,
+   onAddCourse,
++  onUpdateCourse,
++  onToggleCourseFavorite,
++  onToggleCourseCompleted,
+   onDeleteCourse,
+ }: {
+   topic: StudyTrailTopic | null
+@@ -483,6 +596,9 @@ function TopicDetails({
+   onToggleResourceStudied: (topicId: string, resourceId: string) => void
+   onDeleteResource: (topicId: string, resourceId: string, resourceTitle: string, topicTitle: string) => void
+   onAddCourse: (topicId: string, course: StudyTrailUserCourse) => void
++  onUpdateCourse: (topicId: string, course: StudyTrailUserCourse) => void
++  onToggleCourseFavorite: (topicId: string, courseId: string) => void
++  onToggleCourseCompleted: (topicId: string, courseId: string) => void
+   onDeleteCourse: (topicId: string, courseId: string, courseTitle: string, topicTitle: string) => void
+ }) {
+   if (!topic) {
+@@ -584,7 +700,14 @@ function TopicDetails({
+             </div>
+           </div>
+ 
+-          <UserCourseList topic={topic} onAddCourse={onAddCourse} onDeleteCourse={onDeleteCourse} />
++          <UserCourseList
++            topic={topic}
++            onAddCourse={onAddCourse}
++            onUpdateCourse={onUpdateCourse}
++            onToggleCourseFavorite={onToggleCourseFavorite}
++            onToggleCourseCompleted={onToggleCourseCompleted}
++            onDeleteCourse={onDeleteCourse}
++          />
+         </div>
+       </CardContent>
+     </Card>
+@@ -772,6 +895,48 @@ export function TrailsView() {
+     }))
+   }
+ 
++  const handleUpdateCourse = (topicId: string, updatedCourse: StudyTrailUserCourse) => {
++    updateActiveTrailTopic(topicId, (topic) => ({
++      ...topic,
++      userCourses: (topic.userCourses ?? []).map((course) =>
++        course.id === updatedCourse.id ? updatedCourse : course,
++      ),
++    }))
++  }
++
++  const handleToggleCourseFavorite = (topicId: string, courseId: string) => {
++    const now = new Date().toISOString()
++
++    updateActiveTrailTopic(topicId, (topic) => ({
++      ...topic,
++      userCourses: (topic.userCourses ?? []).map((course) =>
++        course.id === courseId
++          ? { ...course, isFavorite: course.isFavorite !== true, updatedAt: now }
++          : course,
++      ),
++    }))
++  }
++
++  const handleToggleCourseCompleted = (topicId: string, courseId: string) => {
++    const now = new Date().toISOString()
++
++    updateActiveTrailTopic(topicId, (topic) => ({
++      ...topic,
++      userCourses: (topic.userCourses ?? []).map((course) => {
++        if (course.id !== courseId) return course
++
++        const isCompleted = course.isCompleted !== true
++
++        return {
++          ...course,
++          isCompleted,
++          completedAt: isCompleted ? now : null,
++          updatedAt: now,
++        }
++      }),
++    }))
++  }
++
+   const handleDeleteCourse = (topicId: string, courseId: string, courseTitle: string, topicTitle: string) => {
+     const confirmed = window.confirm(`Excluir o curso "${courseTitle}" da matéria "${topicTitle}"?`)
+ 
+@@ -842,6 +1007,9 @@ export function TrailsView() {
+               onToggleResourceStudied={handleToggleResourceStudied}
+               onDeleteResource={handleDeleteResource}
+               onAddCourse={handleAddCourse}
++              onUpdateCourse={handleUpdateCourse}
++              onToggleCourseFavorite={handleToggleCourseFavorite}
++              onToggleCourseCompleted={handleToggleCourseCompleted}
+               onDeleteCourse={handleDeleteCourse}
+             />
+           </section>
+diff --git a/src/lib/storage.ts b/src/lib/storage.ts
+index 1ebd76b..9e6178a 100644
+--- a/src/lib/storage.ts
++++ b/src/lib/storage.ts
+@@ -143,6 +143,43 @@ function normalizeStudyTopicMasteryStatus(value: unknown): StudyTopicMasteryStat
+     : null
+ }
+ 
++const COURSE_PLATFORM_ALIASES: Array<{ hostname: string; label: string }> = [
++  { hostname: "alura.com.br", label: "Alura" },
++  { hostname: "youtube.com", label: "YouTube" },
++  { hostname: "youtu.be", label: "YouTube" },
++  { hostname: "udemy.com", label: "Udemy" },
++  { hostname: "coursera.org", label: "Coursera" },
++  { hostname: "edx.org", label: "edX" },
++  { hostname: "rocketseat.com.br", label: "Rocketseat" },
++  { hostname: "dio.me", label: "DIO" },
++  { hostname: "freecodecamp.org", label: "freeCodeCamp" },
++  { hostname: "cursoemvideo.com", label: "Curso em Vídeo" },
++  { hostname: "web.dev", label: "web.dev" },
++  { hostname: "figma.com", label: "Figma" },
++]
++
++function normalizeCoursePlatformName(platform: string, url: string): string {
++  const rawPlatform = platform.trim()
++  const rawUrl = url.trim()
++  const candidates = [rawPlatform, rawUrl]
++
++  for (const candidate of candidates) {
++    const normalized = candidate
++      .toLowerCase()
++      .replace(/^https?:\/\//, "")
++      .replace(/^www\./, "")
++      .split(/[/?#]/)[0]
++
++    const alias = COURSE_PLATFORM_ALIASES.find(
++      (item) => normalized === item.hostname || normalized.endsWith(`.${item.hostname}`),
++    )
++
++    if (alias) return alias.label
++  }
++
++  return rawPlatform || rawUrl
++}
++
+ function normalizeNumber(value: unknown, fallback: number): number {
+   return typeof value === "number" && Number.isFinite(value) ? value : fallback
+ }
+@@ -490,8 +527,12 @@ function normalizeStudyTrailUserCourse(raw: unknown, index: number): StudyTrailU
+     id: normalizeString(raw.id, `user-course-${index + 1}`),
+     title,
+     url,
+-    platform: normalizeString(raw.platform, url),
++    platform: normalizeCoursePlatformName(normalizeString(raw.platform, url), url),
+     createdAt: normalizeString(raw.createdAt, new Date(0).toISOString()),
++    updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : undefined,
++    isFavorite: raw.isFavorite === true,
++    isCompleted: raw.isCompleted === true,
++    completedAt: typeof raw.completedAt === "string" ? raw.completedAt : null,
+   }
+ }
+ 

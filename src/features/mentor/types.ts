@@ -60,6 +60,9 @@ export interface MentorContextTrailUserCourseSignal {
   title: string
   url: string
   platform: string
+  isFavorite: boolean
+  isCompleted: boolean
+  completedAt: string | null
 }
 
 export interface MentorContextTrailTopicSignal {
@@ -179,6 +182,10 @@ export interface StudyTrailUserCourse {
   url: string
   platform: string
   createdAt: string
+  updatedAt?: string
+  isFavorite?: boolean
+  isCompleted?: boolean
+  completedAt?: string | null
 }
 
 export interface StudyTrailTopic {

@@ -143,6 +143,43 @@ function normalizeStudyTopicMasteryStatus(value: unknown): StudyTopicMasteryStat
     : null
 }
 
+const COURSE_PLATFORM_ALIASES: Array<{ hostname: string; label: string }> = [
+  { hostname: "alura.com.br", label: "Alura" },
+  { hostname: "youtube.com", label: "YouTube" },
+  { hostname: "youtu.be", label: "YouTube" },
+  { hostname: "udemy.com", label: "Udemy" },
+  { hostname: "coursera.org", label: "Coursera" },
+  { hostname: "edx.org", label: "edX" },
+  { hostname: "rocketseat.com.br", label: "Rocketseat" },
+  { hostname: "dio.me", label: "DIO" },
+  { hostname: "freecodecamp.org", label: "freeCodeCamp" },
+  { hostname: "cursoemvideo.com", label: "Curso em Vídeo" },
+  { hostname: "web.dev", label: "web.dev" },
+  { hostname: "figma.com", label: "Figma" },
+]
+
+function normalizeCoursePlatformName(platform: string, url: string): string {
+  const rawPlatform = platform.trim()
+  const rawUrl = url.trim()
+  const candidates = [rawPlatform, rawUrl]
+
+  for (const candidate of candidates) {
+    const normalized = candidate
+      .toLowerCase()
+      .replace(/^https?:\/\//, "")
+      .replace(/^www\./, "")
+      .split(/[/?#]/)[0]
+
+    const alias = COURSE_PLATFORM_ALIASES.find(
+      (item) => normalized === item.hostname || normalized.endsWith(`.${item.hostname}`),
+    )
+
+    if (alias) return alias.label
+  }
+
+  return rawPlatform || rawUrl
+}
+
 function normalizeNumber(value: unknown, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback
 }
@@ -490,8 +527,12 @@ function normalizeStudyTrailUserCourse(raw: unknown, index: number): StudyTrailU
     id: normalizeString(raw.id, `user-course-${index + 1}`),
     title,
     url,
-    platform: normalizeString(raw.platform, url),
+    platform: normalizeCoursePlatformName(normalizeString(raw.platform, url), url),
     createdAt: normalizeString(raw.createdAt, new Date(0).toISOString()),
+    updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : undefined,
+    isFavorite: raw.isFavorite === true,
+    isCompleted: raw.isCompleted === true,
+    completedAt: typeof raw.completedAt === "string" ? raw.completedAt : null,
   }
 }
 

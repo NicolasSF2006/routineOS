@@ -72,8 +72,32 @@ function extractPlatformFromHtml(html: string): string | null {
   return candidates.find((item) => item && item.length >= 2 && item.length <= 80) ?? null
 }
 
+const PLATFORM_HOSTNAME_ALIASES: Array<{ hostname: string; label: string }> = [
+  { hostname: "alura.com.br", label: "Alura" },
+  { hostname: "youtube.com", label: "YouTube" },
+  { hostname: "youtu.be", label: "YouTube" },
+  { hostname: "udemy.com", label: "Udemy" },
+  { hostname: "coursera.org", label: "Coursera" },
+  { hostname: "edx.org", label: "edX" },
+  { hostname: "rocketseat.com.br", label: "Rocketseat" },
+  { hostname: "dio.me", label: "DIO" },
+  { hostname: "freecodecamp.org", label: "freeCodeCamp" },
+  { hostname: "cursoemvideo.com", label: "Curso em Vídeo" },
+  { hostname: "web.dev", label: "web.dev" },
+  { hostname: "figma.com", label: "Figma" },
+]
+
+function getFriendlyPlatformFromHostname(hostname: string): string | null {
+  const normalized = hostname.toLowerCase().replace(/^www\./, "")
+  const alias = PLATFORM_HOSTNAME_ALIASES.find(
+    (item) => normalized === item.hostname || normalized.endsWith(`.${item.hostname}`),
+  )
+
+  return alias?.label ?? null
+}
+
 function getDomainFallback(url: URL): string {
-  return url.hostname.replace(/^www\./, "")
+  return getFriendlyPlatformFromHostname(url.hostname) ?? url.hostname.replace(/^www\./, "")
 }
 
 export async function POST(request: NextRequest) {
@@ -96,6 +120,7 @@ export async function POST(request: NextRequest) {
   }
 
   const fallback = getDomainFallback(parsedUrl)
+  const hostnameAlias = getFriendlyPlatformFromHostname(parsedUrl.hostname)
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
 
@@ -117,8 +142,10 @@ export async function POST(request: NextRequest) {
 
     const html = (await response.text()).slice(0, MAX_HTML_CHARS)
     const platform = extractPlatformFromHtml(html)
+    const resolvedPlatform = hostnameAlias ?? platform ?? fallback
+    const source = hostnameAlias ? "domain-alias" : platform ? "metadata" : "domain"
 
-    return NextResponse.json({ platform: platform ?? fallback, source: platform ? "metadata" : "domain" })
+    return NextResponse.json({ platform: resolvedPlatform, source })
   } catch {
     return NextResponse.json({ platform: fallback, source: "domain" })
   } finally {

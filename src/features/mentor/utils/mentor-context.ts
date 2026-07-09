@@ -208,6 +208,9 @@ function summarizeStudyTrail(): MentorContext["studyTrail"] {
           title: course.title,
           url: course.url,
           platform: course.platform,
+          isFavorite: course.isFavorite === true,
+          isCompleted: course.isCompleted === true,
+          completedAt: course.completedAt ?? null,
         })),
       }
     }),
