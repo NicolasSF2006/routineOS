@@ -1,0 +1,78 @@
+diff --git a/src/features/routine-builder/components/routine-builder-view.tsx b/src/features/routine-builder/components/routine-builder-view.tsx
+index 012451c..495ce52 100644
+--- a/src/features/routine-builder/components/routine-builder-view.tsx
++++ b/src/features/routine-builder/components/routine-builder-view.tsx
+@@ -451,6 +451,7 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+   const [dragPreview, setDragPreview] = useState<DragPreviewState | null>(null)
+   const [isBlockPanelOpen, setIsBlockPanelOpen] = useState(false)
+   const [isMobileBlockPickerOpen, setIsMobileBlockPickerOpen] = useState(false)
++  const [mobileDaySlideOffset, setMobileDaySlideOffset] = useState(0)
+   const dragStartOffsetMinutesRef = useRef(0)
+   const toastTimerRef = useRef<number | null>(null)
+   const openMenuRef = useRef<HTMLDivElement | null>(null)
+@@ -782,6 +783,14 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+     setSelectedDateKey(dateKey)
+   }
+ 
++  const animateMobileDayChange = (direction: -1 | 1) => {
++    setMobileDaySlideOffset(direction > 0 ? 28 : -28)
++
++    window.requestAnimationFrame(() => {
++      setMobileDaySlideOffset(0)
++    })
++  }
++
+   const moveDay = (direction: -1 | 1) => {
+     const nextDate = parseDateKey(selectedDateKey)
+ 
+@@ -789,6 +798,11 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+     selectDate(toDateKey(nextDate))
+   }
+ 
++  const moveMobileDay = (direction: -1 | 1) => {
++    animateMobileDayChange(direction)
++    moveDay(direction)
++  }
++
+   const shouldIgnoreMobileSwipeTarget = (target: EventTarget | null) => {
+     return target instanceof Element
+       ? Boolean(target.closest("button, a, input, textarea, select, [role='button']"))
+@@ -820,7 +834,7 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+ 
+     if (horizontalDistance < 60 || horizontalDistance <= verticalDistance) return
+ 
+-    moveDay(deltaX < 0 ? 1 : -1)
++    moveMobileDay(deltaX < 0 ? 1 : -1)
+   }
+ 
+   const handleMobileSwipeCancel = () => {
+@@ -1974,7 +1988,13 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+             </div>
+           </header>
+ 
+-          <div className="border-b border-border/60 bg-background px-4 py-5 sm:px-6">
++          <div
++            className="border-b border-border/60 bg-background px-4 py-5 transition-[transform,opacity] duration-200 ease-out sm:px-6"
++            style={{
++              transform: `translateX(${mobileDaySlideOffset}px)`,
++              opacity: mobileDaySlideOffset === 0 ? 1 : 0.86,
++            }}
++          >
+             <div className="min-w-0">
+               <p className="truncate text-sm font-medium text-muted-foreground">
+                 {selectedWeekDayInfo.isToday ? "Dia atual" : "Dia selecionado"}
+@@ -2001,8 +2021,12 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+             onPointerLeave={handleMobileSwipeCancel}
+           >
+             <div
+-              className="relative mx-auto w-full max-w-4xl"
+-              style={{ height: selectedDayTimelineHeight }}
++              className="relative mx-auto w-full max-w-4xl transition-[transform,opacity] duration-200 ease-out"
++              style={{
++                height: selectedDayTimelineHeight,
++                transform: `translateX(${mobileDaySlideOffset}px)`,
++                opacity: mobileDaySlideOffset === 0 ? 1 : 0.86,
++              }}
+             >
+               {timeSlots.map((slot) => (
+                 <div

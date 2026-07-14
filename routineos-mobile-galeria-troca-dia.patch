@@ -1,0 +1,49 @@
+diff --git a/src/features/routine-builder/components/routine-builder-view.tsx b/src/features/routine-builder/components/routine-builder-view.tsx
+index 8e31a98..72913c4 100644
+--- a/src/features/routine-builder/components/routine-builder-view.tsx
++++ b/src/features/routine-builder/components/routine-builder-view.tsx
+@@ -94,6 +94,7 @@ interface MobileSwipeState {
+   y: number
+   pointerId: number
+   intent: MobileSwipeIntent
++  deltaX: number
+ }
+ 
+ function readDragPayload(event: DragEvent<HTMLElement>): DragPayload | null {
+@@ -898,6 +899,7 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+       y: event.clientY,
+       pointerId: event.pointerId,
+       intent: "pending",
++      deltaX: 0,
+     }
+ 
+     try {
+@@ -936,6 +938,7 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+     const maxOffset = Math.max(96, swipeWidth * 0.92)
+     const nextOffset = Math.min(Math.max(deltaX, -maxOffset), maxOffset)
+ 
++    swipeStart.deltaX = nextOffset
+     setMobileDaySwipeOffset(nextOffset)
+   }
+ 
+@@ -951,10 +954,10 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+       return
+     }
+ 
+-    const deltaX = event.clientX - swipeStart.x
++    const deltaX = swipeStart.deltaX || event.clientX - swipeStart.x
+     const horizontalDistance = Math.abs(deltaX)
+     const swipeWidth = getMobileSwipeWidth()
+-    const shouldChangeDay = horizontalDistance >= Math.min(110, swipeWidth * 0.28)
++    const shouldChangeDay = horizontalDistance >= Math.min(80, swipeWidth * 0.22)
+ 
+     setIsMobileDaySwipeAnimating(true)
+ 
+@@ -2131,7 +2134,6 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+             onPointerMove={handleMobileSwipeMove}
+             onPointerUp={handleMobileSwipeEnd}
+             onPointerCancel={handleMobileSwipeCancel}
+-            onPointerLeave={handleMobileSwipeCancel}
+           >
+             <div
+               className={cn(

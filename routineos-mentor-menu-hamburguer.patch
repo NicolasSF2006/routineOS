@@ -1,0 +1,180 @@
+diff --git a/src/app/page.tsx b/src/app/page.tsx
+index 8db3ecc..8e43c5f 100644
+--- a/src/app/page.tsx
++++ b/src/app/page.tsx
+@@ -22,6 +22,7 @@ function isViewKey(value: string | null): value is ViewKey {
+ export default function Page() {
+   const [view, setCurrentView] = useState<ViewKey>("rotina")
+   const [isOnboardingOpen, setIsOnboardingOpen] = useState(false)
++  const [isMentorOpen, setIsMentorOpen] = useState(false)
+ 
+   useEffect(() => {
+     const storedView = window.localStorage.getItem(STORAGE_KEYS.view)
+@@ -56,7 +57,11 @@ export default function Page() {
+ 
+   return (
+     <div className="min-h-svh overflow-x-hidden bg-background">
+-      <AppHeader activeView={view} onNavigate={navigateToView} />
++      <AppHeader
++        activeView={view}
++        onNavigate={navigateToView}
++        onOpenMentor={() => setIsMentorOpen(true)}
++      />
+       <main
+         className={
+           view === "configurar-rotina"
+@@ -78,7 +83,11 @@ export default function Page() {
+         ) : null}
+       </main>
+       <OnboardingDialog open={isOnboardingOpen} onComplete={handleCompleteOnboarding} />
+-      <MentorWidget currentView={view} />
++      <MentorWidget
++        currentView={view}
++        isOpen={isMentorOpen}
++        onClose={() => setIsMentorOpen(false)}
++      />
+     </div>
+   )
+ }
+diff --git a/src/components/layout/app-header.tsx b/src/components/layout/app-header.tsx
+index cfe460a..115303a 100644
+--- a/src/components/layout/app-header.tsx
++++ b/src/components/layout/app-header.tsx
+@@ -2,7 +2,7 @@
+ 
+ import { useState } from "react"
+ import Image from "next/image"
+-import { Menu } from "lucide-react"
++import { Bot, Menu } from "lucide-react"
+ import {
+   Sheet,
+   SheetContent,
+@@ -19,9 +19,11 @@ import type { ViewKey } from "@/types/navigation"
+ export function AppHeader({
+   activeView,
+   onNavigate,
++  onOpenMentor,
+ }: {
+   activeView: ViewKey
+   onNavigate: (view: ViewKey) => void
++  onOpenMentor: () => void
+ }) {
+   const [open, setOpen] = useState(false)
+ 
+@@ -30,6 +32,11 @@ export function AppHeader({
+     setOpen(false)
+   }
+ 
++  const handleOpenMentor = () => {
++    setOpen(false)
++    onOpenMentor()
++  }
++
+   return (
+     <header className="sticky top-0 z-40 border-b border-border/80 bg-background/85 backdrop-blur-md">
+       <div className="mx-auto flex h-14 max-w-7xl items-center justify-between gap-3 px-4 sm:h-16 sm:px-6">
+@@ -135,6 +142,24 @@ export function AppHeader({
+                     </button>
+                   )
+                 })}
++
++                <div className="my-1 h-px bg-border" aria-hidden="true" />
++
++                <button
++                  type="button"
++                  onClick={handleOpenMentor}
++                  className="flex items-center gap-3 rounded-xl px-3 py-3 text-left text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
++                >
++                  <span className="flex size-9 items-center justify-center rounded-lg bg-muted text-muted-foreground">
++                    <Bot className="size-5" aria-hidden="true" />
++                  </span>
++                  <span className="flex min-w-0 flex-col">
++                    <span className="text-sm font-medium">Mentor IA</span>
++                    <span className="wrap-break-word text-sm text-muted-foreground">
++                      Abra o assistente de estudos
++                    </span>
++                  </span>
++                </button>
+               </nav>
+             </SheetContent>
+           </Sheet>
+diff --git a/src/features/mentor/components/mentor-widget.tsx b/src/features/mentor/components/mentor-widget.tsx
+index 7c812fc..f68eb07 100644
+--- a/src/features/mentor/components/mentor-widget.tsx
++++ b/src/features/mentor/components/mentor-widget.tsx
+@@ -1,55 +1,39 @@
+ "use client"
+ 
+-import { useEffect, useState } from "react"
+-import { Bot } from "lucide-react"
++import { useEffect } from "react"
+ import { MentorChatPanel } from "@/features/mentor/components/mentor-chat-panel"
+ import type { ViewKey } from "@/types/navigation"
+ 
+-export function MentorWidget({ currentView }: { currentView: ViewKey }) {
+-  const [isOpen, setIsOpen] = useState(false)
+-
++export function MentorWidget({
++  currentView,
++  isOpen,
++  onClose,
++}: {
++  currentView: ViewKey
++  isOpen: boolean
++  onClose: () => void
++}) {
+   useEffect(() => {
+     if (!isOpen) return
+ 
+     const handleKeyDown = (event: KeyboardEvent) => {
+       if (event.key === "Escape") {
+-        setIsOpen(false)
++        onClose()
+       }
+     }
+ 
+     window.addEventListener("keydown", handleKeyDown)
+     return () => window.removeEventListener("keydown", handleKeyDown)
+-  }, [isOpen])
++  }, [isOpen, onClose])
+ 
+-  return (
+-    <>
+-      {isOpen ? (
+-        <aside
+-          className="fixed inset-x-3 bottom-3 top-20 z-[60] max-w-full sm:inset-auto sm:bottom-5 sm:right-5 sm:top-auto sm:h-[min(72svh,680px)] sm:w-[min(440px,calc(100vw-2.5rem))]"
+-          aria-label="Painel do Mentor IA"
+-        >
+-          <MentorChatPanel currentView={currentView} onClose={() => setIsOpen(false)} />
+-        </aside>
+-      ) : null}
++  if (!isOpen) return null
+ 
+-      {!isOpen ? (
+-        <div className="fixed bottom-20 right-4 z-[55] flex items-center gap-2 sm:bottom-24 sm:right-5">
+-          <div className="group flex items-center gap-2">
+-            <span className="pointer-events-none hidden translate-x-2 rounded-full border border-border/70 bg-popover px-3 py-2 text-sm font-medium text-popover-foreground opacity-0 shadow-lg transition-all duration-200 group-hover:translate-x-0 group-hover:opacity-100 sm:block">
+-              Mentor IA
+-            </span>
+-            <button
+-              type="button"
+-              className="flex size-14 items-center justify-center rounded-full border border-primary/30 bg-primary text-primary-foreground shadow-2xl shadow-primary/20 transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+-              onClick={() => setIsOpen(true)}
+-              aria-label="Abrir Mentor IA"
+-              title="Abrir Mentor IA"
+-            >
+-              <Bot className="size-6" aria-hidden="true" />
+-            </button>
+-          </div>
+-        </div>
+-      ) : null}
+-    </>
++  return (
++    <aside
++      className="fixed inset-x-3 bottom-3 top-20 z-[60] max-w-full sm:inset-auto sm:bottom-5 sm:right-5 sm:top-auto sm:h-[min(72svh,680px)] sm:w-[min(440px,calc(100vw-2.5rem))]"
++      aria-label="Painel do Mentor IA"
++    >
++      <MentorChatPanel currentView={currentView} onClose={onClose} />
++    </aside>
+   )
+ }

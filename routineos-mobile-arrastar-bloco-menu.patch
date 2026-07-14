@@ -1,0 +1,342 @@
+diff --git a/src/features/routine-builder/components/routine-builder-view.tsx b/src/features/routine-builder/components/routine-builder-view.tsx
+index 22478b3..b47d448 100644
+--- a/src/features/routine-builder/components/routine-builder-view.tsx
++++ b/src/features/routine-builder/components/routine-builder-view.tsx
+@@ -104,8 +104,29 @@ interface MobileBlockPickerDragState {
+   isDragging: boolean
+ }
+ 
++interface MobilePaletteDragState {
++  blockType: RoutineBlockType
++  pointerId: number
++  startX: number
++  startY: number
++  currentX: number
++  currentY: number
++  isDragging: boolean
++}
++
++interface MobilePaletteDragPreviewState {
++  blockType: RoutineBlockType
++  x: number
++  y: number
++  minutes: number | null
++  snapped: boolean
++  isOverTimeline: boolean
++}
++
+ const MOBILE_BLOCK_PICKER_TRANSITION_MS = 220
+ const MOBILE_BLOCK_PICKER_CLOSE_THRESHOLD_PX = 90
++const MOBILE_PALETTE_LONG_PRESS_MS = 260
++const MOBILE_PALETTE_LONG_PRESS_CANCEL_DISTANCE_PX = 14
+ 
+ function readDragPayload(event: DragEvent<HTMLElement>): DragPayload | null {
+   const rawPayload = event.dataTransfer.getData(DND_MIME_TYPE) || event.dataTransfer.getData("text/plain")
+@@ -480,11 +501,13 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+   const [isBlockPanelOpen, setIsBlockPanelOpen] = useState(false)
+   const [isMobileBlockPickerOpen, setIsMobileBlockPickerOpen] = useState(false)
+   const [isMobileBlockPickerVisible, setIsMobileBlockPickerVisible] = useState(false)
++  const [mobilePaletteDragPreview, setMobilePaletteDragPreview] = useState<MobilePaletteDragPreviewState | null>(null)
+   const dragStartOffsetMinutesRef = useRef(0)
+   const toastTimerRef = useRef<number | null>(null)
+   const openMenuRef = useRef<HTMLDivElement | null>(null)
+   const workspaceScrollRef = useRef<HTMLDivElement | null>(null)
+   const mobileTimelineScrollRef = useRef<HTMLDivElement | null>(null)
++  const mobileDayLaneRef = useRef<HTMLDivElement | null>(null)
+   const mobileSwipeContainerRef = useRef<HTMLDivElement | null>(null)
+   const mobileSwipeTrackRef = useRef<HTMLDivElement | null>(null)
+   const mobileSwipeStartRef = useRef<MobileSwipeState | null>(null)
+@@ -495,6 +518,9 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+   const mobileBlockPickerCloseTimeoutRef = useRef<number | null>(null)
+   const mobileBlockPickerDragRef = useRef<MobileBlockPickerDragState | null>(null)
+   const mobileBlockPickerIgnoreClickRef = useRef(false)
++  const mobilePaletteDragRef = useRef<MobilePaletteDragState | null>(null)
++  const mobilePaletteLongPressTimerRef = useRef<number | null>(null)
++  const mobilePaletteDragCleanupRef = useRef<(() => void) | null>(null)
+   const selectedDayColumnRef = useRef<HTMLDivElement | null>(null)
+   const autoScrollDateKeyRef = useRef<string | null>(null)
+   const mobileAutoScrollDateKeyRef = useRef<string | null>(null)
+@@ -679,6 +705,12 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+       if (mobileBlockPickerCloseTimeoutRef.current !== null) {
+         window.clearTimeout(mobileBlockPickerCloseTimeoutRef.current)
+       }
++
++      if (mobilePaletteLongPressTimerRef.current !== null) {
++        window.clearTimeout(mobilePaletteLongPressTimerRef.current)
++      }
++
++      mobilePaletteDragCleanupRef.current?.()
+     }
+   }, [])
+ 
+@@ -1746,8 +1778,181 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+     mobileBlockPickerIgnoreClickRef.current = false
+   }
+ 
+-  const handleMobileBlockTypeSelect = (type: RoutineBlockType) => {
+-    openCreateDialog(type, selectedWeekday, fallbackStartMinutes)
++  const clearMobilePaletteLongPressTimer = () => {
++    if (mobilePaletteLongPressTimerRef.current === null) return
++
++    window.clearTimeout(mobilePaletteLongPressTimerRef.current)
++    mobilePaletteLongPressTimerRef.current = null
++  }
++
++  const cleanupMobilePaletteDragListeners = () => {
++    mobilePaletteDragCleanupRef.current?.()
++    mobilePaletteDragCleanupRef.current = null
++  }
++
++  const getMobilePaletteDropResult = (clientX: number, clientY: number, blockType: RoutineBlockType) => {
++    const lane = mobileDayLaneRef.current
++
++    if (!lane) return null
++
++    const laneRect = lane.getBoundingClientRect()
++
++    if (
++      clientX < laneRect.left ||
++      clientX > laneRect.right ||
++      clientY < laneRect.top ||
++      clientY > laneRect.bottom
++    ) {
++      return null
++    }
++
++    const durationMinutes = getEditingDefaults(blockType).durationMinutes
++    const rawMinutes = getTimelineMinutesFromPointer(
++      clientY,
++      lane,
++      timelineRange.startMinutes,
++      timelineRange.endMinutes,
++    )
++    const maxStartMinutes = Math.max(timelineRange.startMinutes, timelineRange.endMinutes - durationMinutes)
++    const startMinutes = clampMinutes(rawMinutes, timelineRange.startMinutes, maxStartMinutes)
++
++    return getSnapResult(startMinutes, selectedWeekday, durationMinutes, {
++      kind: "palette",
++      blockType,
++    })
++  }
++
++  const updateMobilePaletteDragPreview = (clientX: number, clientY: number, blockType: RoutineBlockType) => {
++    const dropResult = getMobilePaletteDropResult(clientX, clientY, blockType)
++
++    setMobilePaletteDragPreview({
++      blockType,
++      x: clientX,
++      y: clientY,
++      minutes: dropResult?.minutes ?? null,
++      snapped: dropResult?.snapped ?? false,
++      isOverTimeline: Boolean(dropResult),
++    })
++  }
++
++  const finishMobilePaletteDrag = (event: PointerEvent) => {
++    const dragState = mobilePaletteDragRef.current
++
++    clearMobilePaletteLongPressTimer()
++    cleanupMobilePaletteDragListeners()
++    mobilePaletteDragRef.current = null
++
++    if (!dragState) return
++
++    if (dragState.isDragging) {
++      event.preventDefault()
++      const dropResult = getMobilePaletteDropResult(event.clientX, event.clientY, dragState.blockType)
++
++      if (dropResult) {
++        insertBlockIntoDay(
++          selectedWeekday,
++          createBlockFromType(dragState.blockType, selectedWeekday, dropResult.minutes),
++        )
++      }
++    }
++
++    setDraggingPayload(null)
++    setDragPreview(null)
++    setMobilePaletteDragPreview(null)
++  }
++
++  const cancelMobilePaletteDrag = () => {
++    clearMobilePaletteLongPressTimer()
++    cleanupMobilePaletteDragListeners()
++    mobilePaletteDragRef.current = null
++    setDraggingPayload(null)
++    setDragPreview(null)
++    setMobilePaletteDragPreview(null)
++  }
++
++  const startMobilePaletteDrag = () => {
++    const dragState = mobilePaletteDragRef.current
++
++    if (!dragState || dragState.isDragging) return
++
++    dragState.isDragging = true
++    setDraggingPayload({ kind: "palette", blockType: dragState.blockType })
++    setOpenMenuBlockId(null)
++    closeMobileBlockPickerFromDrag()
++    updateMobilePaletteDragPreview(dragState.currentX, dragState.currentY, dragState.blockType)
++  }
++
++  const handleMobilePaletteBlockPointerDown = (
++    event: ReactPointerEvent<HTMLButtonElement>,
++    blockType: RoutineBlockType,
++  ) => {
++    if (event.pointerType === "mouse" && event.button !== 0) return
++
++    event.preventDefault()
++    event.stopPropagation()
++
++    clearMobilePaletteLongPressTimer()
++    cleanupMobilePaletteDragListeners()
++
++    mobilePaletteDragRef.current = {
++      blockType,
++      pointerId: event.pointerId,
++      startX: event.clientX,
++      startY: event.clientY,
++      currentX: event.clientX,
++      currentY: event.clientY,
++      isDragging: false,
++    }
++
++    const handlePointerMove = (pointerEvent: PointerEvent) => {
++      const dragState = mobilePaletteDragRef.current
++
++      if (!dragState || dragState.pointerId !== pointerEvent.pointerId) return
++
++      dragState.currentX = pointerEvent.clientX
++      dragState.currentY = pointerEvent.clientY
++
++      const deltaX = pointerEvent.clientX - dragState.startX
++      const deltaY = pointerEvent.clientY - dragState.startY
++      const distance = Math.hypot(deltaX, deltaY)
++
++      if (!dragState.isDragging && distance > MOBILE_PALETTE_LONG_PRESS_CANCEL_DISTANCE_PX) {
++        cancelMobilePaletteDrag()
++        return
++      }
++
++      if (!dragState.isDragging) return
++
++      pointerEvent.preventDefault()
++      updateMobilePaletteDragPreview(pointerEvent.clientX, pointerEvent.clientY, dragState.blockType)
++    }
++
++    const handlePointerEnd = (pointerEvent: PointerEvent) => {
++      if (mobilePaletteDragRef.current?.pointerId !== pointerEvent.pointerId) return
++
++      finishMobilePaletteDrag(pointerEvent)
++    }
++
++    const handlePointerCancel = (pointerEvent: PointerEvent) => {
++      if (mobilePaletteDragRef.current?.pointerId !== pointerEvent.pointerId) return
++
++      cancelMobilePaletteDrag()
++    }
++
++    window.addEventListener("pointermove", handlePointerMove, { passive: false })
++    window.addEventListener("pointerup", handlePointerEnd)
++    window.addEventListener("pointercancel", handlePointerCancel)
++
++    mobilePaletteDragCleanupRef.current = () => {
++      window.removeEventListener("pointermove", handlePointerMove)
++      window.removeEventListener("pointerup", handlePointerEnd)
++      window.removeEventListener("pointercancel", handlePointerCancel)
++    }
++
++    mobilePaletteLongPressTimerRef.current = window.setTimeout(() => {
++      mobilePaletteLongPressTimerRef.current = null
++      startMobilePaletteDrag()
++    }, MOBILE_PALETTE_LONG_PRESS_MS)
+   }
+ 
+   const renderBlockPalette = () => (
+@@ -2409,7 +2614,11 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+                           </div>
+                         ))}
+ 
+-                        <div className="absolute bottom-0 left-[3.25rem] right-0 top-0 sm:left-[4.5rem]">
++                        <div
++                          ref={isCurrentMobileDay ? mobileDayLaneRef : undefined}
++                          className="absolute bottom-0 left-[3.25rem] right-0 top-0 sm:left-[4.5rem]"
++                          data-mobile-routine-day-lane="true"
++                        >
+                           {dayView.layouts.map(({ block, top, height }, blockIndex) => {
+                             const option = getBuilderBlockOption(block.type)
+                             const menuOpen = isCurrentMobileDay && openMenuBlockId === block.id
+@@ -2434,18 +2643,11 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+                                 }}
+                               >
+                                 <div className="flex h-full min-w-0 items-start justify-between gap-2">
+-                                  <button
+-                                    type="button"
++                                  <div
+                                     className={cn(
+                                       "min-w-0 flex-1 text-left",
+                                       isCompactBlock && "flex items-center gap-2 overflow-hidden",
+                                     )}
+-                                    onClick={() =>
+-                                      isCurrentMobileDay
+-                                        ? openEditDialog(block, dayView.weekday)
+-                                        : undefined
+-                                    }
+-                                    tabIndex={isCurrentMobileDay ? 0 : -1}
+                                   >
+                                     <span
+                                       className={cn(
+@@ -2467,7 +2669,7 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+                                     >
+                                       {block.durationMinutes}min
+                                     </span>
+-                                  </button>
++                                  </div>
+ 
+                                   <Button
+                                     type="button"
+@@ -2596,9 +2798,9 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+                 <button
+                   key={option.type}
+                   type="button"
+-                  onClick={() => handleMobileBlockTypeSelect(option.type)}
++                  onPointerDown={(event) => handleMobilePaletteBlockPointerDown(event, option.type)}
+                   className={cn(
+-                    "min-h-16 rounded-2xl border px-4 py-3 text-left shadow-sm transition-colors hover:brightness-110",
++                    "min-h-16 touch-none select-none rounded-2xl border px-4 py-3 text-left shadow-sm transition-colors hover:brightness-110",
+                     option.className,
+                   )}
+                 >
+@@ -2613,6 +2815,32 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+         </div>
+       ) : null}
+ 
++      {mobilePaletteDragPreview ? (
++        <div
++          className={cn(
++            "pointer-events-none fixed z-[10000] w-44 -translate-x-1/2 -translate-y-1/2 rounded-2xl border p-3 text-left shadow-2xl ring-1 ring-white/10 xl:hidden",
++            getBuilderBlockOption(mobilePaletteDragPreview.blockType).className,
++            mobilePaletteDragPreview.isOverTimeline ? "opacity-100" : "opacity-75",
++          )}
++          style={{
++            left: mobilePaletteDragPreview.x,
++            top: mobilePaletteDragPreview.y - 18,
++          }}
++          aria-hidden="true"
++        >
++          <span className="block truncate text-sm font-semibold text-foreground">
++            {getBuilderBlockOption(mobilePaletteDragPreview.blockType).label}
++          </span>
++          <span className="mt-1 block text-xs text-muted-foreground">
++            {mobilePaletteDragPreview.minutes !== null
++              ? `${formatTimeLabel(mobilePaletteDragPreview.minutes)}${
++                  mobilePaletteDragPreview.snapped ? " · encaixado" : ""
++                }`
++              : "Arraste para um horário"}
++          </span>
++        </div>
++      ) : null}
++
+       {toast ? (
+         <div className="fixed bottom-5 right-5 z-[10000] flex max-w-sm items-center rounded-2xl border border-border bg-background px-4 py-3 text-sm text-foreground shadow-2xl ring-1 ring-white/10">
+           <span className="min-w-0 flex-1">{toast.message}</span>

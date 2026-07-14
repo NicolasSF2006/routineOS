@@ -1,0 +1,629 @@
+diff --git a/src/features/routine-builder/components/routine-builder-view.tsx b/src/features/routine-builder/components/routine-builder-view.tsx
+index 495ce52..8e31a98 100644
+--- a/src/features/routine-builder/components/routine-builder-view.tsx
++++ b/src/features/routine-builder/components/routine-builder-view.tsx
+@@ -87,6 +87,15 @@ interface RoutineToastState {
+   message: string
+ }
+ 
++type MobileSwipeIntent = "pending" | "horizontal" | "vertical"
++
++interface MobileSwipeState {
++  x: number
++  y: number
++  pointerId: number
++  intent: MobileSwipeIntent
++}
++
+ function readDragPayload(event: DragEvent<HTMLElement>): DragPayload | null {
+   const rawPayload = event.dataTransfer.getData(DND_MIME_TYPE) || event.dataTransfer.getData("text/plain")
+ 
+@@ -125,6 +134,14 @@ function buildWeekDays(baseDate: Date) {
+   })
+ }
+ 
++function getDateKeyOffset(dateKey: string, offsetDays: number): string {
++  const date = parseDateKey(dateKey)
++
++  date.setDate(date.getDate() + offsetDays)
++
++  return toDateKey(date)
++}
++
+ function getEditingDefaults(type: RoutineBlockType) {
+   const option = getBuilderBlockOption(type)
+ 
+@@ -451,13 +468,16 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+   const [dragPreview, setDragPreview] = useState<DragPreviewState | null>(null)
+   const [isBlockPanelOpen, setIsBlockPanelOpen] = useState(false)
+   const [isMobileBlockPickerOpen, setIsMobileBlockPickerOpen] = useState(false)
+-  const [mobileDaySlideOffset, setMobileDaySlideOffset] = useState(0)
++  const [mobileDaySwipeOffset, setMobileDaySwipeOffset] = useState(0)
++  const [isMobileDaySwipeAnimating, setIsMobileDaySwipeAnimating] = useState(false)
+   const dragStartOffsetMinutesRef = useRef(0)
+   const toastTimerRef = useRef<number | null>(null)
+   const openMenuRef = useRef<HTMLDivElement | null>(null)
+   const workspaceScrollRef = useRef<HTMLDivElement | null>(null)
+   const mobileTimelineScrollRef = useRef<HTMLDivElement | null>(null)
+-  const mobileSwipeStartRef = useRef<{ x: number; y: number; pointerId: number } | null>(null)
++  const mobileSwipeContainerRef = useRef<HTMLDivElement | null>(null)
++  const mobileSwipeStartRef = useRef<MobileSwipeState | null>(null)
++  const mobileSwipeTimeoutRef = useRef<number | null>(null)
+   const selectedDayColumnRef = useRef<HTMLDivElement | null>(null)
+   const autoScrollDateKeyRef = useRef<string | null>(null)
+   const mobileAutoScrollDateKeyRef = useRef<string | null>(null)
+@@ -529,6 +549,50 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+     timelineBaseHeight,
+     ...selectedDayBlockLayouts.map((layout) => layout.top + layout.height + 84),
+   )
++  const mobileRoutineSnapshot = useMemo(
++    () => (draftWeek ? upsertRoutineWeek(activeDraftRoutine, cloneRoutineWeek(draftWeek)) : activeDraftRoutine),
++    [activeDraftRoutine, draftWeek],
++  )
++  const mobileDayViews = useMemo(
++    () =>
++      ([-1, 0, 1] as const).map((offset) => {
++        const dateKey = getDateKeyOffset(selectedDateKey, offset)
++        const date = parseDateKey(dateKey)
++        const weekday = getWeekdayFromDateKey(dateKey)
++        const days = buildWeekDays(date)
++        const dayInfo = days.find((day) => day.dateKey === dateKey) ?? days[getWeekdayIndex(weekday)]
++        const week = createRoutineWeekFromDate(dateKey, mobileRoutineSnapshot)
++        const routineDay = getRoutineWeekDay(week, weekday)
++        const layouts = getDayBlockLayouts(
++          routineDay.blocks,
++          timelineRange.startMinutes,
++          fallbackStartMinutes,
++        )
++        const dayConflictBlockIds = getConflictingBlockIds(week, fallbackStartMinutes)
++        const dayTimelineHeight = Math.max(
++          timelineBaseHeight,
++          ...layouts.map((layout) => layout.top + layout.height + 84),
++        )
++
++        return {
++          offset,
++          dateKey,
++          weekday,
++          dayInfo,
++          layouts,
++          conflictBlockIds: dayConflictBlockIds,
++          conflictMessage: formatConflictMessage(getConflictWeekdays(week, fallbackStartMinutes)),
++          timelineHeight: dayTimelineHeight,
++        }
++      }),
++    [
++      fallbackStartMinutes,
++      mobileRoutineSnapshot,
++      selectedDateKey,
++      timelineBaseHeight,
++      timelineRange.startMinutes,
++    ],
++  )
+ 
+   useEffect(() => {
+     if (isLoading) return
+@@ -570,6 +634,10 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+       if (toastTimerRef.current !== null) {
+         window.clearTimeout(toastTimerRef.current)
+       }
++
++      if (mobileSwipeTimeoutRef.current !== null) {
++        window.clearTimeout(mobileSwipeTimeoutRef.current)
++      }
+     }
+   }, [])
+ 
+@@ -783,14 +851,6 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+     setSelectedDateKey(dateKey)
+   }
+ 
+-  const animateMobileDayChange = (direction: -1 | 1) => {
+-    setMobileDaySlideOffset(direction > 0 ? 28 : -28)
+-
+-    window.requestAnimationFrame(() => {
+-      setMobileDaySlideOffset(0)
+-    })
+-  }
+-
+   const moveDay = (direction: -1 | 1) => {
+     const nextDate = parseDateKey(selectedDateKey)
+ 
+@@ -798,28 +858,87 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+     selectDate(toDateKey(nextDate))
+   }
+ 
+-  const moveMobileDay = (direction: -1 | 1) => {
+-    animateMobileDayChange(direction)
+-    moveDay(direction)
+-  }
+-
+   const shouldIgnoreMobileSwipeTarget = (target: EventTarget | null) => {
+     return target instanceof Element
+       ? Boolean(target.closest("button, a, input, textarea, select, [role='button']"))
+       : false
+   }
+ 
++  const clearMobileSwipeTimeout = () => {
++    if (mobileSwipeTimeoutRef.current === null) return
++
++    window.clearTimeout(mobileSwipeTimeoutRef.current)
++    mobileSwipeTimeoutRef.current = null
++  }
++
++  const finishMobileSwipeAnimation = (callback?: () => void) => {
++    clearMobileSwipeTimeout()
++
++    mobileSwipeTimeoutRef.current = window.setTimeout(() => {
++      callback?.()
++      setIsMobileDaySwipeAnimating(false)
++      setMobileDaySwipeOffset(0)
++      mobileSwipeTimeoutRef.current = null
++    }, 220)
++  }
++
++  const getMobileSwipeWidth = () =>
++    mobileSwipeContainerRef.current?.getBoundingClientRect().width ?? window.innerWidth
++
+   const handleMobileSwipeStart = (event: ReactPointerEvent<HTMLElement>) => {
+     if (event.pointerType === "mouse" && event.button !== 0) return
+     if (shouldIgnoreMobileSwipeTarget(event.target)) return
+ 
++    clearMobileSwipeTimeout()
++    setIsMobileDaySwipeAnimating(false)
++    setMobileDaySwipeOffset(0)
++
+     mobileSwipeStartRef.current = {
+       x: event.clientX,
+       y: event.clientY,
+       pointerId: event.pointerId,
++      intent: "pending",
++    }
++
++    try {
++      event.currentTarget.setPointerCapture(event.pointerId)
++    } catch {
++      // O capture pode falhar em alguns navegadores; o swipe ainda funciona sem ele.
+     }
+   }
+ 
++  const handleMobileSwipeMove = (event: ReactPointerEvent<HTMLElement>) => {
++    const swipeStart = mobileSwipeStartRef.current
++
++    if (!swipeStart || swipeStart.pointerId !== event.pointerId) return
++
++    const deltaX = event.clientX - swipeStart.x
++    const deltaY = event.clientY - swipeStart.y
++    const horizontalDistance = Math.abs(deltaX)
++    const verticalDistance = Math.abs(deltaY)
++
++    if (swipeStart.intent === "pending") {
++      if (verticalDistance > 10 && verticalDistance >= horizontalDistance) {
++        swipeStart.intent = "vertical"
++        return
++      }
++
++      if (horizontalDistance > 10 && horizontalDistance > verticalDistance) {
++        swipeStart.intent = "horizontal"
++      }
++    }
++
++    if (swipeStart.intent !== "horizontal") return
++
++    event.preventDefault()
++
++    const swipeWidth = getMobileSwipeWidth()
++    const maxOffset = Math.max(96, swipeWidth * 0.92)
++    const nextOffset = Math.min(Math.max(deltaX, -maxOffset), maxOffset)
++
++    setMobileDaySwipeOffset(nextOffset)
++  }
++
+   const handleMobileSwipeEnd = (event: ReactPointerEvent<HTMLElement>) => {
+     const swipeStart = mobileSwipeStartRef.current
+ 
+@@ -827,18 +946,35 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+ 
+     mobileSwipeStartRef.current = null
+ 
++    if (swipeStart.intent !== "horizontal") {
++      setMobileDaySwipeOffset(0)
++      return
++    }
++
+     const deltaX = event.clientX - swipeStart.x
+-    const deltaY = event.clientY - swipeStart.y
+     const horizontalDistance = Math.abs(deltaX)
+-    const verticalDistance = Math.abs(deltaY)
++    const swipeWidth = getMobileSwipeWidth()
++    const shouldChangeDay = horizontalDistance >= Math.min(110, swipeWidth * 0.28)
+ 
+-    if (horizontalDistance < 60 || horizontalDistance <= verticalDistance) return
++    setIsMobileDaySwipeAnimating(true)
+ 
+-    moveMobileDay(deltaX < 0 ? 1 : -1)
++    if (!shouldChangeDay) {
++      setMobileDaySwipeOffset(0)
++      finishMobileSwipeAnimation()
++      return
++    }
++
++    const direction = deltaX < 0 ? 1 : -1
++
++    setMobileDaySwipeOffset(direction > 0 ? -swipeWidth : swipeWidth)
++    finishMobileSwipeAnimation(() => moveDay(direction))
+   }
+ 
+   const handleMobileSwipeCancel = () => {
+     mobileSwipeStartRef.current = null
++    setIsMobileDaySwipeAnimating(true)
++    setMobileDaySwipeOffset(0)
++    finishMobileSwipeAnimation()
+   }
+ 
+   const updateDraftDay = (weekday: Weekday, updater: (day: RoutineDay) => RoutineDay) => {
+@@ -1989,179 +2125,207 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+           </header>
+ 
+           <div
+-            className="border-b border-border/60 bg-background px-4 py-5 transition-[transform,opacity] duration-200 ease-out sm:px-6"
+-            style={{
+-              transform: `translateX(${mobileDaySlideOffset}px)`,
+-              opacity: mobileDaySlideOffset === 0 ? 1 : 0.86,
+-            }}
+-          >
+-            <div className="min-w-0">
+-              <p className="truncate text-sm font-medium text-muted-foreground">
+-                {selectedWeekDayInfo.isToday ? "Dia atual" : "Dia selecionado"}
+-              </p>
+-              <p className="mt-1 truncate text-2xl font-semibold text-foreground sm:text-3xl">
+-                {selectedWeekDayInfo.label}, {selectedWeekDayInfo.dayNumber}
+-              </p>
+-            </div>
+-
+-            {conflictMessage ? (
+-              <p className="mt-3 flex items-start gap-2 text-sm font-medium leading-5 text-red-300">
+-                <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+-                <span className="min-w-0">{conflictMessage}</span>
+-              </p>
+-            ) : null}
+-          </div>
+-
+-          <div
+-            ref={mobileTimelineScrollRef}
+-            className="relative flex-1 touch-pan-y overflow-y-auto overscroll-contain px-3 pb-28 pt-2 sm:px-5"
++            ref={mobileSwipeContainerRef}
++            className="relative flex-1 overflow-hidden"
+             onPointerDown={handleMobileSwipeStart}
++            onPointerMove={handleMobileSwipeMove}
+             onPointerUp={handleMobileSwipeEnd}
+             onPointerCancel={handleMobileSwipeCancel}
+             onPointerLeave={handleMobileSwipeCancel}
+           >
+             <div
+-              className="relative mx-auto w-full max-w-4xl transition-[transform,opacity] duration-200 ease-out"
++              className={cn(
++                "flex h-full w-[300%]",
++                isMobileDaySwipeAnimating && "transition-transform duration-200 ease-out",
++              )}
+               style={{
+-                height: selectedDayTimelineHeight,
+-                transform: `translateX(${mobileDaySlideOffset}px)`,
+-                opacity: mobileDaySlideOffset === 0 ? 1 : 0.86,
++                transform: `translate3d(calc(-33.333333% + ${mobileDaySwipeOffset}px), 0, 0)`,
+               }}
+             >
+-              {timeSlots.map((slot) => (
+-                <div
+-                  key={`mobile-time-${slot}`}
+-                  className="absolute left-0 right-0 flex items-center gap-2"
+-                  style={{ top: minutesToTimelineTop(slot, timelineRange.startMinutes) }}
+-                  aria-hidden="true"
+-                >
+-                  <span className="-translate-y-1/2 whitespace-nowrap font-mono text-[0.7rem] leading-none text-muted-foreground tabular-nums sm:w-14 sm:text-xs">
+-                    {formatTimeLabel(slot)}
+-                  </span>
+-                  <span className="min-w-0 flex-1 border-t border-border/55" />
+-                </div>
+-              ))}
++              {mobileDayViews.map((dayView) => {
++                const isCurrentMobileDay = dayView.offset === 0
+ 
+-              <div className="absolute bottom-0 left-[3.25rem] right-0 top-0 sm:left-[4.5rem]">
+-                {selectedDayBlockLayouts.map(({ block, top, height }, blockIndex) => {
+-                  const option = getBuilderBlockOption(block.type)
+-                  const menuOpen = openMenuBlockId === block.id
+-                  const hasConflict = conflictBlockIds.has(block.id)
+-                  const isCompactBlock = height < 54
++                return (
++                  <div
++                    key={dayView.dateKey}
++                    className="flex h-full w-1/3 shrink-0 flex-col overflow-hidden"
++                    aria-hidden={!isCurrentMobileDay}
++                  >
++                    <div className="border-b border-border/60 bg-background px-4 py-5 sm:px-6">
++                      <div className="min-w-0">
++                        <p className="truncate text-sm font-medium text-muted-foreground">
++                          {dayView.dayInfo.isToday ? "Dia atual" : "Dia selecionado"}
++                        </p>
++                        <p className="mt-1 truncate text-2xl font-semibold text-foreground sm:text-3xl">
++                          {dayView.dayInfo.label}, {dayView.dayInfo.dayNumber}
++                        </p>
++                      </div>
++
++                      {dayView.conflictMessage ? (
++                        <p className="mt-3 flex items-start gap-2 text-sm font-medium leading-5 text-red-300">
++                          <AlertTriangle className="mt-0.5 size-4 shrink-0" />
++                          <span className="min-w-0">{dayView.conflictMessage}</span>
++                        </p>
++                      ) : null}
++                    </div>
+ 
+-                  return (
+                     <div
+-                      key={block.id}
+-                      ref={menuOpen ? openMenuRef : undefined}
+-                      className={cn(
+-                        "absolute z-10 overflow-visible rounded-2xl border text-left shadow-sm",
+-                        option.className,
+-                        hasConflict && "border-red-400/80 bg-red-500/25 shadow-red-950/30 ring-1 ring-red-400/50",
+-                        isCompactBlock ? "px-2 py-1.5" : "p-3",
+-                      )}
+-                      style={{
+-                        top,
+-                        height,
+-                        left: 8,
+-                        right: 0,
+-                      }}
++                      ref={isCurrentMobileDay ? mobileTimelineScrollRef : undefined}
++                      className="relative flex-1 touch-pan-y overflow-y-auto overscroll-contain px-3 pb-28 pt-2 sm:px-5"
+                     >
+-                      <div className="flex h-full min-w-0 items-start justify-between gap-2">
+-                        <button
+-                          type="button"
+-                          className={cn(
+-                            "min-w-0 flex-1 text-left",
+-                            isCompactBlock && "flex items-center gap-2 overflow-hidden",
+-                          )}
+-                          onClick={() => openEditDialog(block, selectedWeekday)}
+-                        >
+-                          <span
+-                            className={cn(
+-                              "block truncate font-semibold text-foreground",
+-                              isCompactBlock
+-                                ? "min-w-0 flex-1 text-sm leading-none"
+-                                : "text-base leading-snug",
+-                              hasConflict && "text-red-50",
+-                            )}
+-                          >
+-                            {block.title}
+-                          </span>
+-                          <span
+-                            className={cn(
+-                              "block truncate text-xs text-muted-foreground",
+-                              isCompactBlock ? "mt-0 shrink-0 leading-none" : "mt-0.5",
+-                              hasConflict && "text-red-100/80",
+-                            )}
+-                          >
+-                            {block.durationMinutes}min
+-                          </span>
+-                        </button>
+-
+-                        <Button
+-                          type="button"
+-                          variant="ghost"
+-                          size="icon-sm"
+-                          className="-mr-1 -mt-1 size-7 shrink-0 rounded-full"
+-                          onClick={() => setOpenMenuBlockId(menuOpen ? null : block.id)}
+-                          aria-label="Abrir ações do bloco"
+-                        >
+-                          <MoreHorizontal className="size-4" />
+-                        </Button>
+-                      </div>
+-
+-                      {menuOpen ? (
+-                        <div className="absolute right-0 top-9 z-50 grid min-w-44 gap-1 rounded-2xl border border-border bg-background p-2 text-foreground shadow-2xl ring-1 ring-white/10">
+-                          <Button
+-                            type="button"
+-                            variant="ghost"
+-                            className="min-h-9 justify-start"
+-                            onClick={() => openEditDialog(block, selectedWeekday)}
+-                          >
+-                            <Pencil className="mr-2 size-4" />
+-                            Editar
+-                          </Button>
+-                          <Button
+-                            type="button"
+-                            variant="ghost"
+-                            className="min-h-9 justify-start"
+-                            onClick={() => duplicateBlock(block, selectedWeekday)}
+-                          >
+-                            <Copy className="mr-2 size-4" />
+-                            Duplicar
+-                          </Button>
+-                          <Button
+-                            type="button"
+-                            variant="ghost"
+-                            className="min-h-9 justify-start"
+-                            disabled={blockIndex === 0}
+-                            onClick={() => moveBlock(block.id, -1, selectedWeekday)}
+-                          >
+-                            ↑ Subir
+-                          </Button>
+-                          <Button
+-                            type="button"
+-                            variant="ghost"
+-                            className="min-h-9 justify-start"
+-                            disabled={blockIndex === selectedDayBlockLayouts.length - 1}
+-                            onClick={() => moveBlock(block.id, 1, selectedWeekday)}
+-                          >
+-                            ↓ Descer
+-                          </Button>
+-                          <Button
+-                            type="button"
+-                            variant="ghost"
+-                            className="min-h-9 justify-start text-destructive hover:text-destructive"
+-                            onClick={() => requestDeleteBlock(block, selectedWeekday)}
++                      <div
++                        className="relative mx-auto w-full max-w-4xl"
++                        style={{ height: dayView.timelineHeight }}
++                      >
++                        {timeSlots.map((slot) => (
++                          <div
++                            key={`mobile-time-${dayView.dateKey}-${slot}`}
++                            className="absolute left-0 right-0 flex items-center gap-2"
++                            style={{ top: minutesToTimelineTop(slot, timelineRange.startMinutes) }}
++                            aria-hidden="true"
+                           >
+-                            <Trash2 className="mr-2 size-4" />
+-                            Excluir
+-                          </Button>
++                            <span className="-translate-y-1/2 whitespace-nowrap font-mono text-[0.7rem] leading-none text-muted-foreground tabular-nums sm:w-14 sm:text-xs">
++                              {formatTimeLabel(slot)}
++                            </span>
++                            <span className="min-w-0 flex-1 border-t border-border/55" />
++                          </div>
++                        ))}
++
++                        <div className="absolute bottom-0 left-[3.25rem] right-0 top-0 sm:left-[4.5rem]">
++                          {dayView.layouts.map(({ block, top, height }, blockIndex) => {
++                            const option = getBuilderBlockOption(block.type)
++                            const menuOpen = isCurrentMobileDay && openMenuBlockId === block.id
++                            const hasConflict = dayView.conflictBlockIds.has(block.id)
++                            const isCompactBlock = height < 54
++
++                            return (
++                              <div
++                                key={block.id}
++                                ref={menuOpen ? openMenuRef : undefined}
++                                className={cn(
++                                  "absolute z-10 overflow-visible rounded-2xl border text-left shadow-sm",
++                                  option.className,
++                                  hasConflict && "border-red-400/80 bg-red-500/25 shadow-red-950/30 ring-1 ring-red-400/50",
++                                  isCompactBlock ? "px-2 py-1.5" : "p-3",
++                                )}
++                                style={{
++                                  top,
++                                  height,
++                                  left: 8,
++                                  right: 0,
++                                }}
++                              >
++                                <div className="flex h-full min-w-0 items-start justify-between gap-2">
++                                  <button
++                                    type="button"
++                                    className={cn(
++                                      "min-w-0 flex-1 text-left",
++                                      isCompactBlock && "flex items-center gap-2 overflow-hidden",
++                                    )}
++                                    onClick={() =>
++                                      isCurrentMobileDay
++                                        ? openEditDialog(block, dayView.weekday)
++                                        : undefined
++                                    }
++                                    tabIndex={isCurrentMobileDay ? 0 : -1}
++                                  >
++                                    <span
++                                      className={cn(
++                                        "block truncate font-semibold text-foreground",
++                                        isCompactBlock
++                                          ? "min-w-0 flex-1 text-sm leading-none"
++                                          : "text-base leading-snug",
++                                        hasConflict && "text-red-50",
++                                      )}
++                                    >
++                                      {block.title}
++                                    </span>
++                                    <span
++                                      className={cn(
++                                        "block truncate text-xs text-muted-foreground",
++                                        isCompactBlock ? "mt-0 shrink-0 leading-none" : "mt-0.5",
++                                        hasConflict && "text-red-100/80",
++                                      )}
++                                    >
++                                      {block.durationMinutes}min
++                                    </span>
++                                  </button>
++
++                                  <Button
++                                    type="button"
++                                    variant="ghost"
++                                    size="icon-sm"
++                                    className="-mr-1 -mt-1 size-7 shrink-0 rounded-full"
++                                    onClick={() =>
++                                      isCurrentMobileDay
++                                        ? setOpenMenuBlockId(menuOpen ? null : block.id)
++                                        : undefined
++                                    }
++                                    disabled={!isCurrentMobileDay}
++                                    aria-label="Abrir ações do bloco"
++                                  >
++                                    <MoreHorizontal className="size-4" />
++                                  </Button>
++                                </div>
++
++                                {menuOpen ? (
++                                  <div className="absolute right-0 top-9 z-50 grid min-w-44 gap-1 rounded-2xl border border-border bg-background p-2 text-foreground shadow-2xl ring-1 ring-white/10">
++                                    <Button
++                                      type="button"
++                                      variant="ghost"
++                                      className="min-h-9 justify-start"
++                                      onClick={() => openEditDialog(block, dayView.weekday)}
++                                    >
++                                      <Pencil className="mr-2 size-4" />
++                                      Editar
++                                    </Button>
++                                    <Button
++                                      type="button"
++                                      variant="ghost"
++                                      className="min-h-9 justify-start"
++                                      onClick={() => duplicateBlock(block, dayView.weekday)}
++                                    >
++                                      <Copy className="mr-2 size-4" />
++                                      Duplicar
++                                    </Button>
++                                    <Button
++                                      type="button"
++                                      variant="ghost"
++                                      className="min-h-9 justify-start"
++                                      disabled={blockIndex === 0}
++                                      onClick={() => moveBlock(block.id, -1, dayView.weekday)}
++                                    >
++                                      ↑ Subir
++                                    </Button>
++                                    <Button
++                                      type="button"
++                                      variant="ghost"
++                                      className="min-h-9 justify-start"
++                                      disabled={blockIndex === dayView.layouts.length - 1}
++                                      onClick={() => moveBlock(block.id, 1, dayView.weekday)}
++                                    >
++                                      ↓ Descer
++                                    </Button>
++                                    <Button
++                                      type="button"
++                                      variant="ghost"
++                                      className="min-h-9 justify-start text-destructive hover:text-destructive"
++                                      onClick={() => requestDeleteBlock(block, dayView.weekday)}
++                                    >
++                                      <Trash2 className="mr-2 size-4" />
++                                      Excluir
++                                    </Button>
++                                  </div>
++                                ) : null}
++                              </div>
++                            )
++                          })}
+                         </div>
+-                      ) : null}
++                      </div>
+                     </div>
+-                  )
+-                })}
+-              </div>
++                  </div>
++                )
++              })}
+             </div>
+           </div>
+ 

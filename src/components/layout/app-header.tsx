@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import Image from "next/image"
-import { Menu } from "lucide-react"
+import { Bot, Menu } from "lucide-react"
 import {
   Sheet,
   SheetContent,
@@ -19,15 +19,22 @@ import type { ViewKey } from "@/types/navigation"
 export function AppHeader({
   activeView,
   onNavigate,
+  onOpenMentor,
 }: {
   activeView: ViewKey
   onNavigate: (view: ViewKey) => void
+  onOpenMentor: () => void
 }) {
   const [open, setOpen] = useState(false)
 
   const handleNavigate = (view: ViewKey) => {
     onNavigate(view)
     setOpen(false)
+  }
+
+  const handleOpenMentor = () => {
+    setOpen(false)
+    onOpenMentor()
   }
 
   return (
@@ -135,6 +142,24 @@ export function AppHeader({
                     </button>
                   )
                 })}
+
+                <div className="my-1 h-px bg-border" aria-hidden="true" />
+
+                <button
+                  type="button"
+                  onClick={handleOpenMentor}
+                  className="flex items-center gap-3 rounded-xl px-3 py-3 text-left text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <span className="flex size-9 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                    <Bot className="size-5" aria-hidden="true" />
+                  </span>
+                  <span className="flex min-w-0 flex-col">
+                    <span className="text-sm font-medium">Mentor IA</span>
+                    <span className="wrap-break-word text-sm text-muted-foreground">
+                      Abra o assistente de estudos
+                    </span>
+                  </span>
+                </button>
               </nav>
             </SheetContent>
           </Sheet>

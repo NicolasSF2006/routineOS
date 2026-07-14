@@ -1,0 +1,50 @@
+diff --git a/src/features/routine-builder/components/routine-builder-view.tsx b/src/features/routine-builder/components/routine-builder-view.tsx
+index cd62d45..6d8d7d9 100644
+--- a/src/features/routine-builder/components/routine-builder-view.tsx
++++ b/src/features/routine-builder/components/routine-builder-view.tsx
+@@ -129,6 +129,7 @@ const MOBILE_PALETTE_LONG_PRESS_MS = 260
+ const MOBILE_PALETTE_LONG_PRESS_CANCEL_DISTANCE_PX = 14
+ const MOBILE_PALETTE_DROP_STEP_MINUTES = 1
+ const MOBILE_PALETTE_PREVIEW_Y_OFFSET_PX = 18
++const MOBILE_PALETTE_PREVIEW_FALLBACK_HEIGHT_PX = 72
+ 
+ function readDragPayload(event: DragEvent<HTMLElement>): DragPayload | null {
+   const rawPayload = event.dataTransfer.getData(DND_MIME_TYPE) || event.dataTransfer.getData("text/plain")
+@@ -1805,25 +1806,34 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+     mobilePaletteDragCleanupRef.current = null
+   }
+ 
++  const getMobilePalettePreviewStartClientY = (clientY: number): number => {
++    const previewHeight =
++      mobilePalettePreviewRef.current?.getBoundingClientRect().height ??
++      MOBILE_PALETTE_PREVIEW_FALLBACK_HEIGHT_PX
++
++    return clientY - MOBILE_PALETTE_PREVIEW_Y_OFFSET_PX - previewHeight / 2
++  }
++
+   const getMobilePaletteDropResult = (clientX: number, clientY: number, blockType: RoutineBlockType) => {
+     const lane = mobileDayLaneRef.current
+ 
+     if (!lane) return null
+ 
+     const laneRect = lane.getBoundingClientRect()
++    const previewStartY = getMobilePalettePreviewStartClientY(clientY)
+ 
+     if (
+       clientX < laneRect.left ||
+       clientX > laneRect.right ||
+-      clientY < laneRect.top ||
+-      clientY > laneRect.bottom
++      previewStartY < laneRect.top ||
++      previewStartY > laneRect.bottom
+     ) {
+       return null
+     }
+ 
+     const durationMinutes = getEditingDefaults(blockType).durationMinutes
+     const rawMinutes = getTimelineMinutesFromPointer(
+-      clientY,
++      previewStartY,
+       lane,
+       timelineRange.startMinutes,
+       timelineRange.endMinutes,

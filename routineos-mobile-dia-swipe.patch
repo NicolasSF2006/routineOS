@@ -1,0 +1,119 @@
+diff --git a/src/features/routine-builder/components/routine-builder-view.tsx b/src/features/routine-builder/components/routine-builder-view.tsx
+index 28e8082..012451c 100644
+--- a/src/features/routine-builder/components/routine-builder-view.tsx
++++ b/src/features/routine-builder/components/routine-builder-view.tsx
+@@ -1,7 +1,7 @@
+ "use client"
+ 
+ import { useEffect, useMemo, useRef, useState } from "react"
+-import type { DragEvent } from "react"
++import type { DragEvent, PointerEvent as ReactPointerEvent } from "react"
+ import {
+   AlertTriangle,
+   ChevronDown,
+@@ -456,6 +456,7 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+   const openMenuRef = useRef<HTMLDivElement | null>(null)
+   const workspaceScrollRef = useRef<HTMLDivElement | null>(null)
+   const mobileTimelineScrollRef = useRef<HTMLDivElement | null>(null)
++  const mobileSwipeStartRef = useRef<{ x: number; y: number; pointerId: number } | null>(null)
+   const selectedDayColumnRef = useRef<HTMLDivElement | null>(null)
+   const autoScrollDateKeyRef = useRef<string | null>(null)
+   const mobileAutoScrollDateKeyRef = useRef<string | null>(null)
+@@ -788,6 +789,44 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+     selectDate(toDateKey(nextDate))
+   }
+ 
++  const shouldIgnoreMobileSwipeTarget = (target: EventTarget | null) => {
++    return target instanceof Element
++      ? Boolean(target.closest("button, a, input, textarea, select, [role='button']"))
++      : false
++  }
++
++  const handleMobileSwipeStart = (event: ReactPointerEvent<HTMLElement>) => {
++    if (event.pointerType === "mouse" && event.button !== 0) return
++    if (shouldIgnoreMobileSwipeTarget(event.target)) return
++
++    mobileSwipeStartRef.current = {
++      x: event.clientX,
++      y: event.clientY,
++      pointerId: event.pointerId,
++    }
++  }
++
++  const handleMobileSwipeEnd = (event: ReactPointerEvent<HTMLElement>) => {
++    const swipeStart = mobileSwipeStartRef.current
++
++    if (!swipeStart || swipeStart.pointerId !== event.pointerId) return
++
++    mobileSwipeStartRef.current = null
++
++    const deltaX = event.clientX - swipeStart.x
++    const deltaY = event.clientY - swipeStart.y
++    const horizontalDistance = Math.abs(deltaX)
++    const verticalDistance = Math.abs(deltaY)
++
++    if (horizontalDistance < 60 || horizontalDistance <= verticalDistance) return
++
++    moveDay(deltaX < 0 ? 1 : -1)
++  }
++
++  const handleMobileSwipeCancel = () => {
++    mobileSwipeStartRef.current = null
++  }
++
+   const updateDraftDay = (weekday: Weekday, updater: (day: RoutineDay) => RoutineDay) => {
+     if (!draftWeek) return
+ 
+@@ -1935,31 +1974,14 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+             </div>
+           </header>
+ 
+-          <div className="border-b border-border/60 bg-background px-3 py-3 sm:px-5">
+-            <div className="flex items-center gap-3">
+-              <div
+-                className={cn(
+-                  "flex size-16 shrink-0 flex-col items-center justify-center rounded-2xl border text-center shadow-sm",
+-                  selectedWeekDayInfo.isToday
+-                    ? "border-cyan-400/80 bg-cyan-400/15 text-cyan-950 shadow-cyan-950/20 dark:text-cyan-100"
+-                    : "border-border/70 bg-muted/20 text-foreground",
+-                )}
+-                aria-label={`Dia atual: ${selectedWeekDayInfo.label} ${selectedWeekDayInfo.dayNumber}`}
+-              >
+-                <span className="text-xs font-medium leading-none">
+-                  {selectedWeekDayInfo.short.toLowerCase()}
+-                </span>
+-                <span className="mt-1 font-mono text-2xl font-semibold leading-none tabular-nums">
+-                  {selectedWeekDayInfo.dayNumber}
+-                </span>
+-              </div>
+-
+-              <div className="min-w-0 flex-1">
+-                <p className="truncate text-sm font-medium text-muted-foreground">Dia atual</p>
+-                <p className="truncate text-lg font-semibold text-foreground">
+-                  {selectedWeekDayInfo.label}, {selectedWeekDayInfo.dayNumber}
+-                </p>
+-              </div>
++          <div className="border-b border-border/60 bg-background px-4 py-5 sm:px-6">
++            <div className="min-w-0">
++              <p className="truncate text-sm font-medium text-muted-foreground">
++                {selectedWeekDayInfo.isToday ? "Dia atual" : "Dia selecionado"}
++              </p>
++              <p className="mt-1 truncate text-2xl font-semibold text-foreground sm:text-3xl">
++                {selectedWeekDayInfo.label}, {selectedWeekDayInfo.dayNumber}
++              </p>
+             </div>
+ 
+             {conflictMessage ? (
+@@ -1972,7 +1994,11 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
+ 
+           <div
+             ref={mobileTimelineScrollRef}
+-            className="relative flex-1 overflow-y-auto overscroll-contain px-3 pb-28 pt-2 sm:px-5"
++            className="relative flex-1 touch-pan-y overflow-y-auto overscroll-contain px-3 pb-28 pt-2 sm:px-5"
++            onPointerDown={handleMobileSwipeStart}
++            onPointerUp={handleMobileSwipeEnd}
++            onPointerCancel={handleMobileSwipeCancel}
++            onPointerLeave={handleMobileSwipeCancel}
+           >
+             <div
+               className="relative mx-auto w-full max-w-4xl"

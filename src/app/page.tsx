@@ -22,6 +22,7 @@ function isViewKey(value: string | null): value is ViewKey {
 export default function Page() {
   const [view, setCurrentView] = useState<ViewKey>("rotina")
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(false)
+  const [isMentorOpen, setIsMentorOpen] = useState(false)
 
   useEffect(() => {
     const storedView = window.localStorage.getItem(STORAGE_KEYS.view)
@@ -56,7 +57,11 @@ export default function Page() {
 
   return (
     <div className="min-h-svh overflow-x-hidden bg-background">
-      <AppHeader activeView={view} onNavigate={navigateToView} />
+      <AppHeader
+        activeView={view}
+        onNavigate={navigateToView}
+        onOpenMentor={() => setIsMentorOpen(true)}
+      />
       <main
         className={
           view === "configurar-rotina"
@@ -78,7 +83,11 @@ export default function Page() {
         ) : null}
       </main>
       <OnboardingDialog open={isOnboardingOpen} onComplete={handleCompleteOnboarding} />
-      <MentorWidget currentView={view} />
+      <MentorWidget
+        currentView={view}
+        isOpen={isMentorOpen}
+        onClose={() => setIsMentorOpen(false)}
+      />
     </div>
   )
 }
