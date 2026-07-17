@@ -9,6 +9,7 @@ export interface MentorMessage {
   role: MentorMessageRole
   content: string
   createdAt: string
+  action?: MentorAction
 }
 
 export interface MentorContextBlock {
@@ -45,7 +46,8 @@ export interface MentorContextMonthTopic {
   totalMinutes: number
 }
 
-export type StudyTopicMasteryStatus = "starting" | "studying" | "understood" | "review" | "difficulty"
+export type StudyTopicMasteryStatus =
+  "starting" | "studying" | "understood" | "review" | "difficulty"
 
 export interface MentorContextTrailResourceSignal {
   id: string
@@ -124,16 +126,92 @@ export interface MentorContext {
   onboardingCompleted: boolean
 }
 
-export type MentorApiResponseMode = "gemini" | "groq" | "openrouter" | "openai" | "mock"
+export type MentorApiResponseMode =
+  "gemini" | "groq" | "openrouter" | "openai" | "mock"
+
+export type MentorRoutineMethod = "pomodoro" | "custom"
+
+export interface MentorRoutineProposalBlock {
+  type: RoutineBlockType
+  title: string
+  description?: string
+  startTime: string
+  durationMinutes: number
+}
+
+export interface MentorRoutinePomodoroSettings {
+  focusMinutes: number
+  shortBreakMinutes: number
+  longBreakMinutes: number
+  longBreakAfterFocusBlocks: number
+}
+
+export interface MentorRoutineProposalSchedule {
+  weekdays: Weekday[]
+  availabilityStartTime: string
+  availabilityEndTime: string
+  blocks: MentorRoutineProposalBlock[]
+}
+
+export interface MentorRoutineProposal {
+  name: string
+  method: MentorRoutineMethod
+  summary: string
+  pomodoro?: MentorRoutinePomodoroSettings
+  schedules: MentorRoutineProposalSchedule[]
+}
+
+export interface MentorStudyTrailTopicPlan {
+  topicId: string
+  description: string
+  steps: string[]
+  projectSuggestion: string
+  resourceIds: string[]
+  videoResourceIds: string[]
+}
+
+export interface MentorStudyTrailPlan {
+  title?: string
+  summary: string
+  mentorNotes?: string
+  topics: MentorStudyTrailTopicPlan[]
+}
+
+export type MentorAction =
+  | {
+      type: "preview-routine"
+      routine: MentorRoutineProposal
+    }
+  | {
+      type: "propose-routine"
+      routine: MentorRoutineProposal
+    }
+  | {
+      type: "propose-study-trail"
+      trail: MentorStudyTrailPlan
+    }
 
 export interface MentorApiResponse {
   reply: string
   mode: MentorApiResponseMode
+  action?: MentorAction
 }
 
-export type StudyResourceType = "documentacao" | "curso" | "video" | "canal" | "playlist" | "plataforma" | "roadmap" | "pratica"
+export type StudyResourceType =
+  | "documentacao"
+  | "curso"
+  | "video"
+  | "canal"
+  | "playlist"
+  | "plataforma"
+  | "roadmap"
+  | "pratica"
 
-export type StudyResourceLevel = "iniciante" | "iniciante-intermediario" | "intermediario" | "iniciante-avancado"
+export type StudyResourceLevel =
+  | "iniciante"
+  | "iniciante-intermediario"
+  | "intermediario"
+  | "iniciante-avancado"
 
 export type StudyResourceTopicKey =
   | "algorithms"

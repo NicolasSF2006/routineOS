@@ -1,7 +1,14 @@
 import { DEFAULT_ROUTINE, WEEK_DAYS } from "@/constants/routine"
 import { getWeekStartDateKey } from "@/features/routine/utils/routine-domain"
 import { parseDateKey, toDateKey } from "@/utils/date"
-import type { Routine, RoutineBlock, RoutineBlockType, RoutineDay, RoutineWeek, Weekday } from "@/types/study"
+import type {
+  Routine,
+  RoutineBlock,
+  RoutineBlockType,
+  RoutineDay,
+  RoutineWeek,
+  Weekday,
+} from "@/types/study"
 
 export const BUILDER_BLOCK_OPTIONS: {
   type: RoutineBlockType
@@ -62,7 +69,10 @@ export const BUILDER_BLOCK_OPTIONS: {
 ]
 
 export function getBuilderBlockOption(type: RoutineBlockType) {
-  return BUILDER_BLOCK_OPTIONS.find((option) => option.type === type) ?? BUILDER_BLOCK_OPTIONS[0]
+  return (
+    BUILDER_BLOCK_OPTIONS.find((option) => option.type === type) ??
+    BUILDER_BLOCK_OPTIONS[0]
+  )
 }
 
 export function createId(prefix: string): string {
@@ -86,10 +96,17 @@ export function getRoutineStartTime(routine: Routine): string {
     .flatMap((day) => day.blocks)
     .sort((a, b) => a.order - b.order)[0]
 
-  return firstBlock?.startTime ?? DEFAULT_ROUTINE.days.flatMap((day) => day.blocks)[0]?.startTime ?? "10:30"
+  return (
+    firstBlock?.startTime ??
+    DEFAULT_ROUTINE.days.flatMap((day) => day.blocks)[0]?.startTime ??
+    "10:30"
+  )
 }
 
-export function recalculateRoutineDayBlocks(blocks: RoutineBlock[], startTime: string): RoutineBlock[] {
+export function recalculateRoutineDayBlocks(
+  blocks: RoutineBlock[],
+  startTime: string,
+): RoutineBlock[] {
   let cursor = startTime
 
   return blocks.map((block, index) => {
@@ -107,7 +124,10 @@ export function recalculateRoutineDayBlocks(blocks: RoutineBlock[], startTime: s
   })
 }
 
-function createEmptyRoutineDay(weekday: Weekday, weekStartDate: string): RoutineDay {
+function createEmptyRoutineDay(
+  weekday: Weekday,
+  weekStartDate: string,
+): RoutineDay {
   return {
     id: `${weekStartDate}-${weekday}`,
     weekday,
@@ -116,9 +136,14 @@ function createEmptyRoutineDay(weekday: Weekday, weekStartDate: string): Routine
   }
 }
 
-export function createRoutineWeekFromDate(dateKey: string, routine: Routine): RoutineWeek {
+export function createRoutineWeekFromDate(
+  dateKey: string,
+  routine: Routine,
+): RoutineWeek {
   const weekStartDate = getWeekStartDateKey(dateKey)
-  const existingWeek = routine.weeks?.find((week) => week.weekStartDate === weekStartDate)
+  const existingWeek = routine.weeks?.find(
+    (week) => week.weekStartDate === weekStartDate,
+  )
 
   if (existingWeek) {
     return cloneRoutineWeek(existingWeek)
@@ -128,7 +153,9 @@ export function createRoutineWeekFromDate(dateKey: string, routine: Routine): Ro
     id: `week-${weekStartDate}`,
     weekStartDate,
     days: WEEK_DAYS.map((day) => {
-      const fallbackDay = routine.days.find((routineDay) => routineDay.weekday === day.key)
+      const fallbackDay = routine.days.find(
+        (routineDay) => routineDay.weekday === day.key,
+      )
       return fallbackDay
         ? {
             ...fallbackDay,
@@ -153,8 +180,14 @@ export function cloneRoutineWeek(week: RoutineWeek): RoutineWeek {
   }
 }
 
-export function getRoutineWeekDay(week: RoutineWeek, weekday: Weekday): RoutineDay {
-  return week.days.find((day) => day.weekday === weekday) ?? createEmptyRoutineDay(weekday, week.weekStartDate)
+export function getRoutineWeekDay(
+  week: RoutineWeek,
+  weekday: Weekday,
+): RoutineDay {
+  return (
+    week.days.find((day) => day.weekday === weekday) ??
+    createEmptyRoutineDay(weekday, week.weekStartDate)
+  )
 }
 
 export function updateRoutineWeekDay(
@@ -165,27 +198,45 @@ export function updateRoutineWeekDay(
   const exists = week.days.some((day) => day.weekday === weekday)
   const days = exists
     ? week.days.map((day) => (day.weekday === weekday ? updater(day) : day))
-    : [...week.days, updater(createEmptyRoutineDay(weekday, week.weekStartDate))]
+    : [
+        ...week.days,
+        updater(createEmptyRoutineDay(weekday, week.weekStartDate)),
+      ]
 
   return { ...week, days }
 }
 
-export function upsertRoutineWeek(routine: Routine, week: RoutineWeek): Routine {
+export function upsertRoutineWeek(
+  routine: Routine,
+  week: RoutineWeek,
+): Routine {
   const weeks = routine.weeks ?? []
-  const nextWeeks = weeks.some((item) => item.weekStartDate === week.weekStartDate)
-    ? weeks.map((item) => (item.weekStartDate === week.weekStartDate ? week : item))
+  const nextWeeks = weeks.some(
+    (item) => item.weekStartDate === week.weekStartDate,
+  )
+    ? weeks.map((item) =>
+        item.weekStartDate === week.weekStartDate ? week : item,
+      )
     : [...weeks, week]
 
   return {
     ...routine,
     id: routine.id === DEFAULT_ROUTINE.id ? "custom-routine" : routine.id,
-    name: routine.name === DEFAULT_ROUTINE.name ? "Rotina personalizada" : routine.name,
-    weeks: nextWeeks.sort((a, b) => a.weekStartDate.localeCompare(b.weekStartDate)),
+    name:
+      routine.name === DEFAULT_ROUTINE.name
+        ? "Rotina personalizada"
+        : routine.name,
+    weeks: nextWeeks.sort((a, b) =>
+      a.weekStartDate.localeCompare(b.weekStartDate),
+    ),
     updatedAt: new Date().toISOString(),
   }
 }
 
-export function getVisibleMonthWeekStartKeys(year: number, month: number): string[] {
+export function getVisibleMonthWeekStartKeys(
+  year: number,
+  month: number,
+): string[] {
   const firstDay = new Date(year, month, 1)
   const lastDay = new Date(year, month + 1, 0)
   const firstWeekStart = parseDateKey(getWeekStartDateKey(toDateKey(firstDay)))
@@ -201,7 +252,10 @@ export function getVisibleMonthWeekStartKeys(year: number, month: number): strin
   return keys
 }
 
-export function cloneWeekForStartDate(week: RoutineWeek, weekStartDate: string): RoutineWeek {
+export function cloneWeekForStartDate(
+  week: RoutineWeek,
+  weekStartDate: string,
+): RoutineWeek {
   return {
     id: `week-${weekStartDate}`,
     weekStartDate,
@@ -217,10 +271,19 @@ export function cloneWeekForStartDate(week: RoutineWeek, weekStartDate: string):
   }
 }
 
-export function repeatWeekForMonth(routine: Routine, sourceWeek: RoutineWeek, year: number, month: number): Routine {
+export function repeatWeekForMonth(
+  routine: Routine,
+  sourceWeek: RoutineWeek,
+  year: number,
+  month: number,
+): Routine {
   const weekStartKeys = getVisibleMonthWeekStartKeys(year, month)
   return weekStartKeys.reduce(
-    (nextRoutine, weekStartDate) => upsertRoutineWeek(nextRoutine, cloneWeekForStartDate(sourceWeek, weekStartDate)),
+    (nextRoutine, weekStartDate) =>
+      upsertRoutineWeek(
+        nextRoutine,
+        cloneWeekForStartDate(sourceWeek, weekStartDate),
+      ),
     routine,
   )
 }

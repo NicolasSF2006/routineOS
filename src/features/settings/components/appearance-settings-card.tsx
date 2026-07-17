@@ -1,5 +1,11 @@
 import { Bell, Moon, Palette, Sun } from "lucide-react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import {
   Select,
@@ -17,12 +23,15 @@ interface AppearanceSettingsCardProps {
   setTheme: (theme: Theme) => void
 }
 
-export function AppearanceSettingsCard({ theme, setTheme }: AppearanceSettingsCardProps) {
+export function AppearanceSettingsCard({
+  theme,
+  setTheme,
+}: AppearanceSettingsCardProps) {
   return (
     <Card>
       <CardHeader>
         <div className="flex items-center gap-2">
-          <span className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <span className="bg-primary/10 text-primary flex size-8 items-center justify-center rounded-lg">
             <Palette className="size-4" />
           </span>
           <CardTitle className="text-xl">Aparência</CardTitle>
@@ -31,8 +40,14 @@ export function AppearanceSettingsCard({ theme, setTheme }: AppearanceSettingsCa
       </CardHeader>
       <CardContent>
         <SettingRow label="Tema" description="Alterne entre claro e escuro">
-          <Select value={theme} onValueChange={(value) => setTheme(value as Theme)}>
-            <SelectTrigger className="w-full min-w-36 sm:w-36">
+          <Select
+            value={theme}
+            onValueChange={(value) => setTheme(value as Theme)}
+          >
+            <SelectTrigger
+              className="w-full min-w-36 sm:w-36"
+              aria-label="Tema da interface"
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -50,9 +65,12 @@ export function AppearanceSettingsCard({ theme, setTheme }: AppearanceSettingsCa
           </Select>
         </SettingRow>
         <Separator />
-        <SettingRow label="Lembretes" description="Notificar sobre blocos da rotina">
+        <SettingRow
+          label="Lembretes"
+          description="Notificar sobre blocos da rotina"
+        >
           <span className="flex items-center gap-2">
-            <Bell className="size-4 text-muted-foreground" />
+            <Bell className="text-muted-foreground size-4" />
             <Switch defaultChecked />
           </span>
         </SettingRow>

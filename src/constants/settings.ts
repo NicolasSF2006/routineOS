@@ -1,4 +1,9 @@
-import type { RoutineMode, SoundEventKey, SoundPreferences, StudySettings } from "@/types/study"
+import type {
+  RoutineMode,
+  SoundEventKey,
+  SoundPreferences,
+  StudySettings,
+} from "@/types/study"
 
 export const SOUND_EVENT_OPTIONS: {
   key: SoundEventKey

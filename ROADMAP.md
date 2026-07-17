@@ -82,3 +82,11 @@
 - Assistente de estudos.
 - Sugestões de revisão.
 - Links e exercícios.
+
+## Dívida técnica pós-preparação
+
+- concluir a divisão do JSX responsivo do construtor após ampliar testes de componentes;
+- aprovar ajustes de paleta e reativar contraste no gate axe;
+- avaliar baselines adicionais para macOS e Windows apenas quando houver necessidade de execução local equivalente;
+- adotar store distribuído de rate limit somente quando houver múltiplas réplicas;
+- expor um acionador de criação por modal apenas se isso virar decisão de produto.

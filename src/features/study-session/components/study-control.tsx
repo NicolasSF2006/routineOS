@@ -26,6 +26,7 @@ import type { UseStudySessionResult } from "@/features/study-session/hooks/use-s
 interface StudyControlProps {
   session: UseStudySessionResult
   hasRoutine: boolean
+  hasConfiguredRoutine: boolean
   selectedDateRelation: "past" | "today" | "future"
   autoAdvance: boolean
   onAutoAdvanceChange: (checked: boolean) => void
@@ -34,6 +35,7 @@ interface StudyControlProps {
 export function StudyControl({
   session,
   hasRoutine,
+  hasConfiguredRoutine,
   selectedDateRelation,
   autoAdvance,
   onAutoAdvanceChange,
@@ -72,11 +74,17 @@ export function StudyControl({
   }
 
   const presenceTime =
-    controlState === "presente" && record?.presenceAt ? formatTime(record.presenceAt) : null
+    controlState === "presente" && record?.presenceAt
+      ? formatTime(record.presenceAt)
+      : null
   const canceledTime =
-    controlState === "cancelado" && record?.canceledAt ? formatTime(record.canceledAt) : null
+    controlState === "cancelado" && record?.canceledAt
+      ? formatTime(record.canceledAt)
+      : null
   const completedTime =
-    controlState === "concluido" && record?.completedAt ? formatTime(record.completedAt) : null
+    controlState === "concluido" && record?.completedAt
+      ? formatTime(record.completedAt)
+      : null
   const showTimer =
     controlState === "estudando" ||
     controlState === "pausado" ||
@@ -84,14 +92,18 @@ export function StudyControl({
     controlState === "cancelado" ||
     controlState === "concluido"
   const showPresenceStatus =
-    controlState === "inicial" || controlState === "presente" || controlState === "cancelado"
+    controlState === "inicial" ||
+    controlState === "presente" ||
+    controlState === "cancelado"
   const showCurrentBlock = Boolean(
     currentBlock &&
-      record?.studyStartedAt &&
-      controlState !== "concluido" &&
-      controlState !== "cancelado",
+    record?.studyStartedAt &&
+    controlState !== "concluido" &&
+    controlState !== "cancelado",
   )
-  const nextBlockIsBreak = nextBlock ? isRoutineBreakBlock(nextBlock.type) : false
+  const nextBlockIsBreak = nextBlock
+    ? isRoutineBreakBlock(nextBlock.type)
+    : false
 
   const handleConfirmCancel = () => {
     cancelDay()
@@ -105,49 +117,62 @@ export function StudyControl({
 
   return (
     <>
-      <Card className="w-full max-w-full min-w-0 overflow-hidden border-border/80">
+      <Card className="border-border/80 w-full max-w-full min-w-0 overflow-hidden">
         <StudyControlHeader />
 
         <div className="flex w-full max-w-full min-w-0 flex-col gap-5 p-4 sm:p-5">
-          {selectedDateRelation === "future" ? (
-            <p className="rounded-xl bg-muted/50 px-4 py-3 text-base text-muted-foreground">
-              Você está visualizando uma data futura. A presença só pode ser marcada no dia atual.
+          {!hasConfiguredRoutine ? (
+            <p className="bg-muted/50 text-muted-foreground rounded-xl px-4 py-3 text-base">
+              Você ainda não criou uma rotina. Use a aba Montar rotina para
+              configurar seus estudos.
+            </p>
+          ) : selectedDateRelation === "future" ? (
+            <p className="bg-muted/50 text-muted-foreground rounded-xl px-4 py-3 text-base">
+              Você está visualizando uma data futura. A presença só pode ser
+              marcada no dia atual.
             </p>
           ) : selectedDateRelation === "past" ? (
-            <p className="rounded-xl bg-muted/50 px-4 py-3 text-base text-muted-foreground">
+            <p className="bg-muted/50 text-muted-foreground rounded-xl px-4 py-3 text-base">
               Este dia já passou. Use o calendário para consultar o histórico.
             </p>
           ) : !hasRoutine ? (
-            <p className="rounded-xl bg-muted/50 px-4 py-3 text-base text-muted-foreground">
+            <p className="bg-muted/50 text-muted-foreground rounded-xl px-4 py-3 text-base">
               Não há rotina para este dia.
             </p>
           ) : (
             <>
               {showPresenceStatus ? (
-                <PresenceStatus presenceTime={presenceTime} canceledTime={canceledTime} />
+                <PresenceStatus
+                  presenceTime={presenceTime}
+                  canceledTime={canceledTime}
+                />
               ) : null}
 
               {showCurrentBlock && currentBlock ? (
-                <div className="rounded-xl border border-border/70 bg-muted/30 p-3">
+                <div className="border-border/70 bg-muted/30 rounded-xl border p-3">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
                     <div className="min-w-0">
-                      <p className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
-                        {isCurrentBlockRoutineBreak ? "Pausa programada" : "Tarefa atual"}
+                      <p className="text-muted-foreground text-sm font-medium tracking-wide uppercase">
+                        {isCurrentBlockRoutineBreak
+                          ? "Pausa programada"
+                          : "Tarefa atual"}
                       </p>
-                      <p className="wrap-break-word text-sm font-semibold text-foreground">
+                      <p className="text-foreground text-sm font-semibold wrap-break-word">
                         {currentBlock.title}
                       </p>
                     </div>
-                    <span className="shrink-0 text-sm font-medium text-muted-foreground">
+                    <span className="text-muted-foreground shrink-0 text-sm font-medium">
                       {formatDuration(currentBlockElapsedSeconds)} /{" "}
                       {formatDuration(currentBlockDurationSeconds)}
                     </span>
                   </div>
-                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-background">
+                  <div className="bg-background mt-3 h-2 overflow-hidden rounded-full">
                     <div
                       className={cn(
                         "h-full rounded-full transition-all duration-500",
-                        isCurrentBlockRoutineBreak ? "bg-status-pausas" : "bg-primary",
+                        isCurrentBlockRoutineBreak
+                          ? "bg-status-pausas"
+                          : "bg-primary",
                       )}
                       style={{ width: `${currentBlockProgress}%` }}
                     />
@@ -165,7 +190,9 @@ export function StudyControl({
                 />
               ) : null}
 
-              {metaReached && controlState !== "inicial" && controlState !== "cancelado" ? (
+              {metaReached &&
+              controlState !== "inicial" &&
+              controlState !== "cancelado" ? (
                 <StudyGoalBanner bonusSeconds={bonusSeconds} />
               ) : null}
 
@@ -194,13 +221,17 @@ export function StudyControl({
       <Dialog open={confirmingCancel} onOpenChange={setConfirmingCancel}>
         <DialogContent>
           <DialogHeader className="pr-8">
-            <DialogTitle>Tem certeza que deseja cancelar o dia de estudo?</DialogTitle>
+            <DialogTitle>
+              Tem certeza que deseja cancelar o dia de estudo?
+            </DialogTitle>
             <DialogDescription>
               O tempo estudado até agora será mantido no histórico.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <DialogClose render={<Button variant="outline" />}>Voltar</DialogClose>
+            <DialogClose render={<Button variant="outline" />}>
+              Voltar
+            </DialogClose>
             <Button variant="destructive" onClick={handleConfirmCancel}>
               Confirmar cancelamento
             </Button>
@@ -213,12 +244,14 @@ export function StudyControl({
           <DialogHeader>
             <DialogTitle>Retomar dia de estudo?</DialogTitle>
             <DialogDescription>
-              O cronômetro continuará de onde parou. O tempo entre o cancelamento e a retomada não
-              será contabilizado.
+              O cronômetro continuará de onde parou. O tempo entre o
+              cancelamento e a retomada não será contabilizado.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <DialogClose render={<Button variant="outline" />}>Voltar</DialogClose>
+            <DialogClose render={<Button variant="outline" />}>
+              Voltar
+            </DialogClose>
             <Button onClick={handleConfirmResume}>Retomar</Button>
           </DialogFooter>
         </DialogContent>

@@ -1,0 +1,210 @@
+import { WEEK_DAYS } from "@/constants/routine"
+import type {
+  MentorMessage,
+  MentorRoutineProposal,
+  MentorRoutineProposalBlock,
+} from "@/features/mentor/types"
+import type { Routine, RoutineBlock, RoutineDay, Weekday } from "@/types/study"
+
+import {
+  WEEKDAY_LABELS,
+  formatTime,
+  normalizeMentorRoutineProposal,
+  timeToMinutes,
+} from "@/features/mentor/utils/mentor-routine-proposal-validation"
+
+export {
+  formatTime,
+  normalizeMentorAction,
+  normalizeMentorRoutineProposal,
+  timeToMinutes,
+} from "@/features/mentor/utils/mentor-routine-proposal-validation"
+function normalizeComparableText(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
+export function isExplicitRoutineConfirmation(message: string): boolean {
+  const normalized = normalizeComparableText(message)
+  if (!normalized) return false
+
+  const adjustmentSignals = [
+    "nao",
+    "mas",
+    "altere",
+    "ajuste",
+    "mude",
+    "troque",
+    "corrija",
+  ]
+  if (
+    adjustmentSignals.some((signal) =>
+      new RegExp(`(^| )${signal}( |$)`).test(normalized),
+    )
+  ) {
+    return false
+  }
+
+  return [
+    "pode criar",
+    "pode aplicar",
+    "pode montar",
+    "crie a rotina",
+    "aplique a rotina",
+    "monte a rotina",
+    "esta bom pode criar",
+    "aprovado",
+    "confirmo",
+  ].some((signal) => normalized.includes(signal))
+}
+
+export function findLatestRoutinePreview(
+  history: MentorMessage[],
+): MentorRoutineProposal | null {
+  for (let index = history.length - 1; index >= 0; index -= 1) {
+    const message = history[index]
+    if (
+      message.role !== "assistant" ||
+      message.action?.type !== "preview-routine"
+    )
+      continue
+
+    return normalizeMentorRoutineProposal(message.action.routine)
+  }
+
+  return null
+}
+
+function createRoutineBlock(
+  proposalBlock: MentorRoutineProposalBlock,
+  weekday: Weekday,
+  index: number,
+  draftId: string,
+): RoutineBlock {
+  const startMinutes = timeToMinutes(proposalBlock.startTime) ?? 0
+  const endMinutes = startMinutes + proposalBlock.durationMinutes
+
+  return {
+    id: `${draftId}-${weekday}-${index + 1}`,
+    type: proposalBlock.type,
+    title: proposalBlock.title,
+    description: proposalBlock.description,
+    startTime: proposalBlock.startTime,
+    endTime: formatTime(endMinutes),
+    durationMinutes: proposalBlock.durationMinutes,
+    order: index + 1,
+  }
+}
+
+export function createRoutineFromMentorProposal(
+  proposal: MentorRoutineProposal,
+  currentRoutine: Routine,
+): Routine {
+  const normalizedProposal = normalizeMentorRoutineProposal(proposal)
+  if (!normalizedProposal) return currentRoutine
+
+  const now = new Date().toISOString()
+  const draftId = `mentor-routine-${Date.now()}`
+  const scheduleByWeekday = new Map<Weekday, MentorRoutineProposalBlock[]>()
+
+  normalizedProposal.schedules.forEach((schedule) => {
+    schedule.weekdays.forEach((weekday) => {
+      scheduleByWeekday.set(weekday, schedule.blocks)
+    })
+  })
+
+  const days: RoutineDay[] = WEEK_DAYS.map((day) => {
+    const proposalBlocks = scheduleByWeekday.get(day.key) ?? []
+    const blocks = proposalBlocks.map((block, index) =>
+      createRoutineBlock(block, day.key, index, draftId),
+    )
+
+    return {
+      id: `${draftId}-${day.key}`,
+      weekday: day.key,
+      blocks,
+      isActive: blocks.length > 0,
+    }
+  })
+
+  return {
+    id: draftId,
+    name: normalizedProposal.name,
+    mode: currentRoutine.mode,
+    days,
+    weeks: [],
+    createdAt: now,
+    updatedAt: now,
+  }
+}
+
+export function getMentorRoutineProposalStats(
+  proposal: MentorRoutineProposal,
+): {
+  dayCount: number
+  blockCount: number
+} {
+  const normalizedProposal = normalizeMentorRoutineProposal(proposal)
+
+  if (!normalizedProposal) {
+    return { dayCount: 0, blockCount: 0 }
+  }
+
+  return normalizedProposal.schedules.reduce(
+    (stats, schedule) => ({
+      dayCount: stats.dayCount + schedule.weekdays.length,
+      blockCount:
+        stats.blockCount + schedule.blocks.length * schedule.weekdays.length,
+    }),
+    { dayCount: 0, blockCount: 0 },
+  )
+}
+
+function formatScheduleDays(weekdays: Weekday[]): string {
+  return weekdays.map((weekday) => WEEKDAY_LABELS[weekday]).join(", ")
+}
+
+function formatProposalBlock(block: MentorRoutineProposalBlock): string {
+  const startMinutes = timeToMinutes(block.startTime) ?? 0
+  const endTime = formatTime(startMinutes + block.durationMinutes)
+  return `- ${block.startTime}–${endTime} — ${block.title}`
+}
+
+export function formatMentorRoutineProposalPreview(
+  proposal: MentorRoutineProposal,
+): string {
+  const normalized = normalizeMentorRoutineProposal(proposal)
+  if (!normalized) {
+    return "A proposta precisa de ajustes antes de ser criada. Revise comigo os dias, horários e durações."
+  }
+
+  const methodLine =
+    normalized.method === "pomodoro" && normalized.pomodoro
+      ? `Pomodoro de ${normalized.pomodoro.focusMinutes} minutos, pausa curta de ${normalized.pomodoro.shortBreakMinutes} minutos e pausa longa de ${normalized.pomodoro.longBreakMinutes} minutos após ${normalized.pomodoro.longBreakAfterFocusBlocks} blocos de foco.`
+      : "Blocos personalizados conforme a sequência combinada."
+
+  const schedules = normalized.schedules.flatMap((schedule) => [
+    `**${formatScheduleDays(schedule.weekdays)} — ${schedule.availabilityStartTime} às ${schedule.availabilityEndTime}**`,
+    ...schedule.blocks.map(formatProposalBlock),
+    "",
+  ])
+
+  return [
+    "Preparei uma proposta de rotina com os horários recalculados para respeitar sua disponibilidade.",
+    "",
+    `**Nome:** ${normalized.name}`,
+    `**Método:** ${methodLine}`,
+    `**Resumo:** ${normalized.summary}`,
+    "",
+    "**Estrutura da rotina:**",
+    ...schedules,
+    "A proposta está boa? Você pode pedir alterações ou responder **“Pode criar a rotina”** para abrir o rascunho em Montar rotina.",
+  ]
+    .join("\n")
+    .trim()
+}

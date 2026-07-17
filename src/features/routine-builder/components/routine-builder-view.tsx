@@ -1,7 +1,12 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
-import type { DragEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react"
+import type {
+  DragEvent,
+  KeyboardEvent as ReactKeyboardEvent,
+  MouseEvent as ReactMouseEvent,
+  PointerEvent as ReactPointerEvent,
+} from "react"
 import {
   AlertTriangle,
   ChevronDown,
@@ -22,7 +27,21 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { PageHeading } from "@/components/shared/page-heading"
 import { WEEK_DAYS } from "@/constants/routine"
+import { STORAGE_EVENTS } from "@/constants/storage"
 import { useRoutine } from "@/features/routine/hooks/use-routine"
+import { createRoutineFromMentorProposal } from "@/features/mentor/utils/mentor-routine-proposal"
+import {
+  clampTimelineMinutes as clampMinutes,
+  formatTimelineTime as formatTimeLabel,
+  getBlockEndMinutes,
+  getBlockStartMinutes,
+  getConflictingBlockIds,
+  getConflictWeekdays,
+  parseTimeToMinutes as timeToMinutes,
+  setBlockStartTime,
+  snapMinutesToStep,
+  sortRoutineDayBlocksByTime,
+} from "@/features/routine/domain/routine-timeline"
 import { getWeekdayFromDateKey } from "@/features/routine/utils/routine-domain"
 import {
   BUILDER_BLOCK_OPTIONS,
@@ -33,495 +52,97 @@ import {
   getRoutineStartTime,
   getRoutineWeekDay,
   getVisibleMonthWeekStartKeys,
-  repeatWeekForMonth,
   updateRoutineWeekDay,
   upsertRoutineWeek,
 } from "@/features/routine-builder/utils/routine-builder"
+import { clearMentorRoutineDraft, loadMentorRoutineDraft } from "@/lib/storage"
 import { cn } from "@/lib/utils"
-import { getMonthLabel, getTodayDateKey, parseDateKey, toDateKey } from "@/utils/date"
-import type { Routine, RoutineBlock, RoutineBlockType, RoutineDay, RoutineWeek, Weekday } from "@/types/study"
+import {
+  getMonthLabel,
+  getTodayDateKey,
+  parseDateKey,
+  toDateKey,
+} from "@/utils/date"
+import type {
+  Routine,
+  RoutineBlock,
+  RoutineBlockType,
+  RoutineDay,
+  RoutineWeek,
+  Weekday,
+} from "@/types/study"
 
 interface RoutineBuilderViewProps {
   onBackToSettings: () => void
   onNavigateToRoutine: () => void
 }
 
-type EditingMode = "create" | "edit"
-type EditingRepeatMode = "none" | "week-daily" | "month-daily" | "month-weekday" | "year-weekday"
-
-interface EditingState {
-  mode: EditingMode
-  weekday: Weekday
-  type: RoutineBlockType
-  title: string
-  description: string
-  durationMinutes: number
-  startTime: string
-  repeatMode: EditingRepeatMode
-  blockId?: string
-}
-
-const DND_MIME_TYPE = "application/routineos-routine-block"
-
-type DragPayload =
-  | { kind: "palette"; blockType: RoutineBlockType }
-  | { kind: "block"; sourceWeekday: Weekday; blockId: string }
-
-interface DragPreviewState {
-  weekday: Weekday
-  minutes: number
-  x: number
-  y: number
-  snapped?: boolean
-}
-
-interface DeleteConfirmationState {
-  blockId: string
-  weekday: Weekday
-  title: string
-  repeatSourceId?: string
-}
-
-interface RoutineToastState {
-  id: string
-  message: string
-}
-
-type MobileSwipeIntent = "pending" | "horizontal" | "vertical"
-
-interface MobileSwipeState {
-  x: number
-  y: number
-  pointerId: number
-  intent: MobileSwipeIntent
-  deltaX: number
-}
-
-interface MobileBlockPickerDragState {
-  y: number
-  pointerId: number
-  deltaY: number
-  isDragging: boolean
-}
-
-interface MobilePaletteDragState {
-  blockType: RoutineBlockType
-  pointerId: number
-  startX: number
-  startY: number
-  currentX: number
-  currentY: number
-  isDragging: boolean
-}
-
-interface MobileRoutineBlockDragState {
-  block: RoutineBlock
-  weekday: Weekday
-  pointerId: number
-  startX: number
-  startY: number
-  currentX: number
-  currentY: number
-  pointerOffsetY: number
-  blockHeight: number
-  isDragging: boolean
-}
-
-interface MobilePaletteDragPreviewState {
-  blockType: RoutineBlockType
-  x: number
-  y: number
-  minutes: number | null
-  snapped: boolean
-  isOverTimeline: boolean
-}
-
-interface MobileRoutineBlockDragPreviewState {
-  block: RoutineBlock
-  x: number
-  y: number
-  minutes: number | null
-  snapped: boolean
-  isOverTimeline: boolean
-  height: number
-}
-
-const MOBILE_BLOCK_PICKER_TRANSITION_MS = 220
-const MOBILE_BLOCK_PICKER_CLOSE_THRESHOLD_PX = 90
-const MOBILE_PALETTE_LONG_PRESS_MS = 260
-const MOBILE_PALETTE_LONG_PRESS_CANCEL_DISTANCE_PX = 14
-const MOBILE_PALETTE_DROP_STEP_MINUTES = 1
-const MOBILE_PALETTE_PREVIEW_Y_OFFSET_PX = 18
-const MOBILE_PALETTE_PREVIEW_FALLBACK_HEIGHT_PX = 72
-const MOBILE_ROUTINE_BLOCK_LONG_PRESS_MS = 240
-const MOBILE_ROUTINE_BLOCK_LONG_PRESS_CANCEL_DISTANCE_PX = 12
-
-function readDragPayload(event: DragEvent<HTMLElement>): DragPayload | null {
-  const rawPayload = event.dataTransfer.getData(DND_MIME_TYPE) || event.dataTransfer.getData("text/plain")
-
-  if (!rawPayload) return null
-
-  try {
-    const parsedPayload = JSON.parse(rawPayload) as DragPayload
-
-    if (parsedPayload.kind === "palette" || parsedPayload.kind === "block") {
-      return parsedPayload
-    }
-  } catch {
-    return null
-  }
-
-  return null
-}
-
-function buildWeekDays(baseDate: Date) {
-  const weekStart = new Date(baseDate)
-  weekStart.setHours(0, 0, 0, 0)
-  weekStart.setDate(baseDate.getDate() - baseDate.getDay())
-  const todayKey = getTodayDateKey()
-
-  return WEEK_DAYS.map((day, index) => {
-    const date = new Date(weekStart)
-    date.setDate(weekStart.getDate() + index)
-    const dateKey = toDateKey(date)
-    return {
-      ...day,
-      date,
-      dateKey,
-      dayNumber: String(date.getDate()).padStart(2, "0"),
-      isToday: dateKey === todayKey,
-    }
-  })
-}
-
-function getDateKeyOffset(dateKey: string, offsetDays: number): string {
-  const date = parseDateKey(dateKey)
-
-  date.setDate(date.getDate() + offsetDays)
-
-  return toDateKey(date)
-}
-
-function getEditingDefaults(type: RoutineBlockType) {
-  const option = getBuilderBlockOption(type)
-
-  const defaults: Partial<Record<RoutineBlockType, { title: string; durationMinutes: number }>> = {
-    study: {
-      title: "Nova tarefa",
-      durationMinutes: 50,
-    },
-    "short-break": {
-      title: "Pausa",
-      durationMinutes: 5,
-    },
-    "long-break": {
-      title: "Pausa longa",
-      durationMinutes: 15,
-    },
-    lunch: {
-      title: "Almoço",
-      durationMinutes: 60,
-    },
-    project: {
-      title: "Novo projeto",
-      durationMinutes: 80,
-    },
-    other: {
-      title: "Outro",
-      durationMinutes: 50,
-    },
-  }
-
-  return {
-    title: defaults[type]?.title ?? option.defaultTitle,
-    durationMinutes: defaults[type]?.durationMinutes ?? option.defaultDurationMinutes,
-  }
-}
-
-function createBlockFromEditing(editing: EditingState): RoutineBlock {
-  return {
-    id: createId(`block-${editing.weekday}`),
-    type: editing.type,
-    title: editing.title.trim() || getBuilderBlockOption(editing.type).defaultTitle,
-    description: editing.description.trim() || undefined,
-    durationMinutes: Math.max(1, Math.floor(editing.durationMinutes || 1)),
-    startTime: editing.startTime,
-    endTime: editing.startTime,
-    order: 1,
-  }
-}
-
-function getWeekdayIndex(weekday: Weekday): number {
-  return Math.max(0, WEEK_DAYS.findIndex((day) => day.key === weekday))
-}
-
-function getDateKeyForWeekdayInWeek(weekStartDate: string, weekday: Weekday): string {
-  const date = parseDateKey(weekStartDate)
-  date.setDate(date.getDate() + getWeekdayIndex(weekday))
-  return toDateKey(date)
-}
-
-function getWeekdayRepeatName(weekday: Weekday): string {
-  const labels: Record<Weekday, string> = {
-    sunday: "domingo",
-    monday: "segunda-feira",
-    tuesday: "terça-feira",
-    wednesday: "quarta-feira",
-    thursday: "quinta-feira",
-    friday: "sexta-feira",
-    saturday: "sábado",
-  }
-
-  return labels[weekday]
-}
-
-function getWeekdayRepeatPrefix(weekday: Weekday): string {
-  const prefix = weekday === "sunday" || weekday === "saturday" ? "Todo" : "Toda"
-  return `${prefix} ${getWeekdayRepeatName(weekday)}`
-}
-
-function getMonthDateKeys(year: number, month: number): string[] {
-  const keys: string[] = []
-  const cursor = new Date(year, month, 1)
-
-  while (cursor.getMonth() === month) {
-    keys.push(toDateKey(cursor))
-    cursor.setDate(cursor.getDate() + 1)
-  }
-
-  return keys
-}
-
-function getYearWeekdayDateKeys(startDateKey: string, weekday: Weekday): string[] {
-  const startDate = parseDateKey(startDateKey)
-  const cursor = new Date(startDate)
-  const endDate = new Date(startDate.getFullYear(), 11, 31)
-
-  while (getWeekdayFromDateKey(toDateKey(cursor)) !== weekday) {
-    cursor.setDate(cursor.getDate() + 1)
-  }
-
-  const keys: string[] = []
-
-  while (cursor <= endDate) {
-    keys.push(toDateKey(cursor))
-    cursor.setDate(cursor.getDate() + 7)
-  }
-
-  return keys
-}
-
-const HOUR_ROW_HEIGHT = 144
-const SNAP_THRESHOLD_MINUTES = 5
-const TIMELINE_HEADER_HEIGHT = 64
-const TIMELINE_VERTICAL_PADDING = 42
-const MIN_VISIBLE_BLOCK_HEIGHT = 20
-const VISUAL_BLOCK_GAP = 8
-const FULL_DAY_START_MINUTES = 0
-const FULL_DAY_END_MINUTES = 24 * 60
-const INITIAL_SCROLL_OFFSET_MINUTES = 60
-
-interface RoutineBlockLayout {
-  block: RoutineBlock
-  top: number
-  height: number
-}
-
-function timeToMinutes(time: string): number | null {
-  const [rawHours, rawMinutes] = time.split(":")
-  const hours = Number(rawHours)
-  const minutes = Number(rawMinutes)
-
-  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null
-  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null
-
-  return hours * 60 + minutes
-}
-
-function formatTimeLabel(minutes: number): string {
-  const normalizedMinutes = Math.max(0, minutes)
-  const hours = Math.floor(normalizedMinutes / 60) % 24
-  const mins = normalizedMinutes % 60
-
-  return `${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}`
-}
-
-function getBlockStartMinutes(block: RoutineBlock, fallbackStartMinutes: number): number {
-  return timeToMinutes(block.startTime) ?? fallbackStartMinutes
-}
-
-function getBlockEndMinutes(block: RoutineBlock, fallbackStartMinutes: number): number {
-  return timeToMinutes(block.endTime) ?? getBlockStartMinutes(block, fallbackStartMinutes) + block.durationMinutes
-}
-
-function clampMinutes(minutes: number, minMinutes = FULL_DAY_START_MINUTES, maxMinutes = FULL_DAY_END_MINUTES - 1): number {
-  return Math.min(maxMinutes, Math.max(minMinutes, minutes))
-}
-
-function snapMinutesToStep(minutes: number, stepMinutes: number): number {
-  if (stepMinutes <= 1) return Math.round(minutes)
-
-  return Math.round(minutes / stepMinutes) * stepMinutes
-}
-
-function getBlockEndTime(startMinutes: number, durationMinutes: number): string {
-  return formatTimeLabel(startMinutes + Math.max(1, Math.floor(durationMinutes || 1)))
-}
-
-function setBlockStartTime(block: RoutineBlock, startMinutes: number): RoutineBlock {
-  const normalizedStartMinutes = clampMinutes(Math.round(startMinutes))
-  const durationMinutes = Math.max(1, Math.floor(block.durationMinutes || 1))
-
-  return {
-    ...block,
-    durationMinutes,
-    startTime: formatTimeLabel(normalizedStartMinutes),
-    endTime: getBlockEndTime(normalizedStartMinutes, durationMinutes),
-  }
-}
-
-function sortRoutineDayBlocksByTime(blocks: RoutineBlock[], fallbackStartMinutes: number): RoutineBlock[] {
-  return blocks
-    .map((block, originalIndex) => ({ block, originalIndex }))
-    .sort((a, b) => {
-      const timeDiff =
-        getBlockStartMinutes(a.block, fallbackStartMinutes) - getBlockStartMinutes(b.block, fallbackStartMinutes)
-
-      if (timeDiff !== 0) return timeDiff
-
-      const orderDiff = (a.block.order ?? a.originalIndex + 1) - (b.block.order ?? b.originalIndex + 1)
-      return orderDiff !== 0 ? orderDiff : a.originalIndex - b.originalIndex
-    })
-    .map(({ block }, index) => ({
-      ...setBlockStartTime(block, getBlockStartMinutes(block, fallbackStartMinutes)),
-      order: index + 1,
-    }))
-}
-
-function getTimelineMinutesFromPointer(
-  clientY: number,
-  laneElement: HTMLElement,
-  timelineStartMinutes: number,
-  timelineEndMinutes: number,
-): number {
-  const laneRect = laneElement.getBoundingClientRect()
-  const pointerY = clientY - laneRect.top - TIMELINE_VERTICAL_PADDING
-  const minutesFromTop = Math.round((pointerY / HOUR_ROW_HEIGHT) * 60)
-
-  return clampMinutes(timelineStartMinutes + minutesFromTop, timelineStartMinutes, timelineEndMinutes - 1)
-}
-
-function getTimelineRange() {
-  return {
-    startMinutes: FULL_DAY_START_MINUTES,
-    endMinutes: FULL_DAY_END_MINUTES,
-  }
-}
-
-function getTimeSlots(startMinutes: number, endMinutes: number): number[] {
-  const slots: number[] = []
-
-  for (let minutes = startMinutes; minutes < endMinutes; minutes += 60) {
-    slots.push(minutes)
-  }
-
-  return slots
-}
-
-function minutesToPixels(minutes: number): number {
-  return (minutes / 60) * HOUR_ROW_HEIGHT
-}
-
-function minutesToTimelineTop(minutes: number, timelineStartMinutes: number): number {
-  return TIMELINE_VERTICAL_PADDING + minutesToPixels(minutes - timelineStartMinutes)
-}
-
-function getDayBlockLayouts(
-  blocks: RoutineBlock[],
-  timelineStartMinutes: number,
-  fallbackStartMinutes: number,
-): RoutineBlockLayout[] {
-  let previousBottom = TIMELINE_VERTICAL_PADDING - VISUAL_BLOCK_GAP
-
-  return [...blocks]
-    .sort(
-      (a, b) =>
-        getBlockStartMinutes(a, fallbackStartMinutes) -
-        getBlockStartMinutes(b, fallbackStartMinutes),
-    )
-    .map((block) => {
-      const blockStart = getBlockStartMinutes(block, fallbackStartMinutes)
-      const naturalTop = Math.max(
-        TIMELINE_VERTICAL_PADDING,
-        minutesToTimelineTop(blockStart, timelineStartMinutes),
-      )
-      const top = Math.max(naturalTop, previousBottom + VISUAL_BLOCK_GAP)
-      const rawHeight = minutesToPixels(Math.max(1, block.durationMinutes))
-      const height = Math.max(MIN_VISIBLE_BLOCK_HEIGHT, rawHeight)
-
-      previousBottom = top + height
-
-      return { block, top, height }
-    })
-}
-
-function getConflictingBlockIds(week: RoutineWeek, fallbackStartMinutes: number): Set<string> {
-  const conflictingBlockIds = new Set<string>()
-
-  week.days.forEach((day) => {
-    const blocks = [...day.blocks].sort(
-      (a, b) => getBlockStartMinutes(a, fallbackStartMinutes) - getBlockStartMinutes(b, fallbackStartMinutes),
-    )
-
-    blocks.forEach((currentBlock, currentIndex) => {
-      const currentStart = getBlockStartMinutes(currentBlock, fallbackStartMinutes)
-      const currentEnd = getBlockEndMinutes(currentBlock, fallbackStartMinutes)
-
-      blocks.slice(currentIndex + 1).forEach((nextBlock) => {
-        const nextStart = getBlockStartMinutes(nextBlock, fallbackStartMinutes)
-        const nextEnd = getBlockEndMinutes(nextBlock, fallbackStartMinutes)
-
-        if (currentStart < nextEnd && nextStart < currentEnd) {
-          conflictingBlockIds.add(currentBlock.id)
-          conflictingBlockIds.add(nextBlock.id)
-        }
-      })
-    })
-  })
-
-  return conflictingBlockIds
-}
-
-function getConflictWeekdays(week: RoutineWeek, fallbackStartMinutes: number): Weekday[] {
-  return week.days
-    .filter((day) => getConflictingBlockIds({ ...week, days: [day] }, fallbackStartMinutes).size > 0)
-    .map((day) => day.weekday)
-}
-
-function formatConflictMessage(weekdays: Weekday[]): string | null {
-  if (weekdays.length === 0) return null
-
-  const labels = weekdays.map((weekday) => getWeekdayRepeatName(weekday))
-
-  if (labels.length === 1) {
-    return `Existe conflito de horário na ${labels[0]}.`
-  }
-
-  const lastLabel = labels[labels.length - 1]
-  const initialLabels = labels.slice(0, -1).join(", ")
-
-  return `Existem conflitos de horário na ${initialLabels} e ${lastLabel}.`
-}
-
-export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps) {
+import {
+  DND_MIME_TYPE,
+  clearTimeoutRef,
+  cancelAnimationFrameRef,
+  runCleanupRef,
+  MOBILE_BLOCK_PICKER_TRANSITION_MS,
+  MOBILE_BLOCK_PICKER_CLOSE_THRESHOLD_PX,
+  MOBILE_PALETTE_LONG_PRESS_MS,
+  MOBILE_PALETTE_LONG_PRESS_CANCEL_DISTANCE_PX,
+  MOBILE_PALETTE_DROP_STEP_MINUTES,
+  MOBILE_PALETTE_PREVIEW_Y_OFFSET_PX,
+  MOBILE_PALETTE_PREVIEW_FALLBACK_HEIGHT_PX,
+  MOBILE_ROUTINE_BLOCK_LONG_PRESS_MS,
+  MOBILE_ROUTINE_BLOCK_LONG_PRESS_CANCEL_DISTANCE_PX,
+  readDragPayload,
+  buildWeekDays,
+  getDateKeyOffset,
+  getEditingDefaults,
+  createBlockFromEditing,
+  getWeekdayIndex,
+  getDateKeyForWeekdayInWeek,
+  getWeekdayRepeatPrefix,
+  getMonthDateKeys,
+  getYearWeekdayDateKeys,
+  HOUR_ROW_HEIGHT,
+  SNAP_THRESHOLD_MINUTES,
+  TIMELINE_HEADER_HEIGHT,
+  TIMELINE_VERTICAL_PADDING,
+  INITIAL_SCROLL_OFFSET_MINUTES,
+  getTimelineMinutesFromPointer,
+  getTimelineRange,
+  getTimeSlots,
+  minutesToPixels,
+  minutesToTimelineTop,
+  getDayBlockLayouts,
+  formatConflictMessage,
+} from "@/features/routine-builder/components/routine-builder-helpers"
+import type {
+  EditingRepeatMode,
+  EditingState,
+  DragPayload,
+  DragPreviewState,
+  DeleteConfirmationState,
+  RoutineToastState,
+  MobileSwipeState,
+  MobileBlockPickerDragState,
+  MobilePaletteDragState,
+  MobileRoutineBlockDragState,
+  MobilePaletteDragPreviewState,
+  MobileRoutineBlockDragPreviewState,
+  RoutineBlockLayout,
+} from "@/features/routine-builder/components/routine-builder-helpers"
+export function RoutineBuilderView({
+  onBackToSettings,
+}: RoutineBuilderViewProps) {
   const { routine, saveRoutine, isLoading } = useRoutine()
-  const [selectedDateKey, setSelectedDateKey] = useState(() => getTodayDateKey())
+  const [selectedDateKey, setSelectedDateKey] = useState(() =>
+    getTodayDateKey(),
+  )
   const [draftRoutine, setDraftRoutine] = useState<Routine | null>(null)
   const [draftWeek, setDraftWeek] = useState<RoutineWeek | null>(null)
   const [openMenuBlockId, setOpenMenuBlockId] = useState<string | null>(null)
   const [editing, setEditing] = useState<EditingState | null>(null)
   const [isSaved, setIsSaved] = useState(false)
-  const [deleteConfirmation, setDeleteConfirmation] = useState<DeleteConfirmationState | null>(null)
+  const [deleteConfirmation, setDeleteConfirmation] =
+    useState<DeleteConfirmationState | null>(null)
   const [isClearConfirmationOpen, setIsClearConfirmationOpen] = useState(false)
   const [toast, setToast] = useState<RoutineToastState | null>(null)
   const [undoStack, setUndoStack] = useState<Routine[]>([])
@@ -530,16 +151,23 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
   const [dragOverWeekday, setDragOverWeekday] = useState<Weekday | null>(null)
   const [dragOverBlockId, setDragOverBlockId] = useState<string | null>(null)
   const [draggingBlockId, setDraggingBlockId] = useState<string | null>(null)
-  const [draggingPayload, setDraggingPayload] = useState<DragPayload | null>(null)
+  const [draggingPayload, setDraggingPayload] = useState<DragPayload | null>(
+    null,
+  )
   const [dragPreview, setDragPreview] = useState<DragPreviewState | null>(null)
   const [isBlockPanelOpen, setIsBlockPanelOpen] = useState(false)
   const [isMobileBlockPickerOpen, setIsMobileBlockPickerOpen] = useState(false)
-  const [isMobileBlockPickerVisible, setIsMobileBlockPickerVisible] = useState(false)
-  const [mobilePaletteDragPreview, setMobilePaletteDragPreview] = useState<MobilePaletteDragPreviewState | null>(null)
-  const [mobileRoutineBlockDragPreview, setMobileRoutineBlockDragPreview] = useState<MobileRoutineBlockDragPreviewState | null>(null)
+  const [isMobileBlockPickerVisible, setIsMobileBlockPickerVisible] =
+    useState(false)
+  const [mobilePaletteDragPreview, setMobilePaletteDragPreview] =
+    useState<MobilePaletteDragPreviewState | null>(null)
+  const [mobileRoutineBlockDragPreview, setMobileRoutineBlockDragPreview] =
+    useState<MobileRoutineBlockDragPreviewState | null>(null)
   const dragStartOffsetMinutesRef = useRef(0)
   const toastTimerRef = useRef<number | null>(null)
   const openMenuRef = useRef<HTMLDivElement | null>(null)
+  const editingDialogRef = useRef<HTMLDivElement | null>(null)
+  const editingReturnFocusRef = useRef<HTMLElement | null>(null)
   const workspaceScrollRef = useRef<HTMLDivElement | null>(null)
   const mobileTimelineScrollRef = useRef<HTMLDivElement | null>(null)
   const mobileDayLaneRef = useRef<HTMLDivElement | null>(null)
@@ -551,7 +179,9 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
   const mobileDaySwipeOffsetRef = useRef(0)
   const mobileBlockPickerSheetRef = useRef<HTMLDivElement | null>(null)
   const mobileBlockPickerCloseTimeoutRef = useRef<number | null>(null)
-  const mobileBlockPickerDragRef = useRef<MobileBlockPickerDragState | null>(null)
+  const mobileBlockPickerDragRef = useRef<MobileBlockPickerDragState | null>(
+    null,
+  )
   const mobileBlockPickerIgnoreClickRef = useRef(false)
   const mobilePaletteDragRef = useRef<MobilePaletteDragState | null>(null)
   const mobilePaletteLongPressTimerRef = useRef<number | null>(null)
@@ -559,7 +189,9 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
   const mobilePaletteDragFrameRef = useRef<number | null>(null)
   const mobilePalettePreviewRef = useRef<HTMLDivElement | null>(null)
   const mobilePalettePreviewTimeRef = useRef<HTMLSpanElement | null>(null)
-  const mobileRoutineBlockDragRef = useRef<MobileRoutineBlockDragState | null>(null)
+  const mobileRoutineBlockDragRef = useRef<MobileRoutineBlockDragState | null>(
+    null,
+  )
   const mobileRoutineBlockLongPressTimerRef = useRef<number | null>(null)
   const mobileRoutineBlockDragCleanupRef = useRef<(() => void) | null>(null)
   const mobileRoutineBlockDragFrameRef = useRef<number | null>(null)
@@ -575,7 +207,8 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
     if (!isMobileBlockPickerOpen) return
 
     const originalBodyOverflow = document.body.style.overflow
-    const originalBodyOverscrollBehavior = document.body.style.overscrollBehavior
+    const originalBodyOverscrollBehavior =
+      document.body.style.overscrollBehavior
 
     document.body.style.overflow = "hidden"
     document.body.style.overscrollBehavior = "none"
@@ -588,9 +221,11 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
 
   const selectedDate = parseDateKey(selectedDateKey)
   const selectedWeekday = getWeekdayFromDateKey(selectedDateKey)
-  const weekDays = useMemo(() => buildWeekDays(selectedDate), [selectedDateKey])
-  const selectedWeekDayInfo = weekDays.find((day) => day.dateKey === selectedDateKey) ?? weekDays[getWeekdayIndex(selectedWeekday)]
-  const selectedMonthLabel = getMonthLabel(selectedDate.getFullYear(), selectedDate.getMonth())
+  const weekDays = useMemo(() => buildWeekDays(selectedDate), [selectedDate])
+  const selectedMonthLabel = getMonthLabel(
+    selectedDate.getFullYear(),
+    selectedDate.getMonth(),
+  )
   const activeDraftRoutine = draftRoutine ?? routine
   const startTime = getRoutineStartTime(activeDraftRoutine)
   const fallbackStartMinutes = timeToMinutes(startTime) ?? 8 * 60
@@ -605,28 +240,34 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
     return new Map(
       WEEK_DAYS.map((day) => {
         const routineDay = getRoutineWeekDay(draftWeek, day.key)
-        return [day.key, getDayBlockLayouts(routineDay.blocks, timelineRange.startMinutes, fallbackStartMinutes)] as const
+        return [
+          day.key,
+          getDayBlockLayouts(
+            routineDay.blocks,
+            timelineRange.startMinutes,
+            fallbackStartMinutes,
+          ),
+        ] as const
       }),
     )
   }, [draftWeek, fallbackStartMinutes, timelineRange.startMinutes])
-  const selectedDay = draftWeek ? getRoutineWeekDay(draftWeek, selectedWeekday) : null
-  const selectedDayBlockLayouts = useMemo(
-    () =>
-      selectedDay
-        ? getDayBlockLayouts(
-            selectedDay.blocks,
-            timelineRange.startMinutes,
-            fallbackStartMinutes,
-          )
-        : [],
-    [fallbackStartMinutes, selectedDay, timelineRange.startMinutes],
-  )
+  const selectedDay = draftWeek
+    ? getRoutineWeekDay(draftWeek, selectedWeekday)
+    : null
   const conflictBlockIds = useMemo(
-    () => (draftWeek ? getConflictingBlockIds(draftWeek, fallbackStartMinutes) : new Set<string>()),
+    () =>
+      draftWeek
+        ? getConflictingBlockIds(draftWeek, fallbackStartMinutes)
+        : new Set<string>(),
     [draftWeek, fallbackStartMinutes],
   )
   const conflictMessage = useMemo(
-    () => (draftWeek ? formatConflictMessage(getConflictWeekdays(draftWeek, fallbackStartMinutes)) : null),
+    () =>
+      draftWeek
+        ? formatConflictMessage(
+            getConflictWeekdays(draftWeek, fallbackStartMinutes),
+          )
+        : null,
     [draftWeek, fallbackStartMinutes],
   )
 
@@ -634,25 +275,27 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
     if (!draftWeek) return null
 
     const blockStarts = draftWeek.days.flatMap((day) =>
-      day.blocks.map((block) => getBlockStartMinutes(block, fallbackStartMinutes)),
+      day.blocks.map((block) =>
+        getBlockStartMinutes(block, fallbackStartMinutes),
+      ),
     )
 
     return blockStarts.length > 0 ? Math.min(...blockStarts) : null
   }, [draftWeek, fallbackStartMinutes])
   const timelineBaseHeight =
-    TIMELINE_VERTICAL_PADDING * 2 + minutesToPixels(timelineRange.endMinutes - timelineRange.startMinutes)
+    TIMELINE_VERTICAL_PADDING * 2 +
+    minutesToPixels(timelineRange.endMinutes - timelineRange.startMinutes)
   const timelineHeight = Math.max(
     timelineBaseHeight,
     ...Array.from(dayBlockLayouts.values()).flatMap((layouts) =>
       layouts.map((layout) => layout.top + layout.height + 84),
     ),
   )
-  const selectedDayTimelineHeight = Math.max(
-    timelineBaseHeight,
-    ...selectedDayBlockLayouts.map((layout) => layout.top + layout.height + 84),
-  )
   const mobileRoutineSnapshot = useMemo(
-    () => (draftWeek ? upsertRoutineWeek(activeDraftRoutine, cloneRoutineWeek(draftWeek)) : activeDraftRoutine),
+    () =>
+      draftWeek
+        ? upsertRoutineWeek(activeDraftRoutine, cloneRoutineWeek(draftWeek))
+        : activeDraftRoutine,
     [activeDraftRoutine, draftWeek],
   )
   const mobileDayViews = useMemo(
@@ -662,7 +305,9 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
         const date = parseDateKey(dateKey)
         const weekday = getWeekdayFromDateKey(dateKey)
         const days = buildWeekDays(date)
-        const dayInfo = days.find((day) => day.dateKey === dateKey) ?? days[getWeekdayIndex(weekday)]
+        const dayInfo =
+          days.find((day) => day.dateKey === dateKey) ??
+          days[getWeekdayIndex(weekday)]
         const week = createRoutineWeekFromDate(dateKey, mobileRoutineSnapshot)
         const routineDay = getRoutineWeekDay(week, weekday)
         const layouts = getDayBlockLayouts(
@@ -670,7 +315,10 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
           timelineRange.startMinutes,
           fallbackStartMinutes,
         )
-        const dayConflictBlockIds = getConflictingBlockIds(week, fallbackStartMinutes)
+        const dayConflictBlockIds = getConflictingBlockIds(
+          week,
+          fallbackStartMinutes,
+        )
         const dayTimelineHeight = Math.max(
           timelineBaseHeight,
           ...layouts.map((layout) => layout.top + layout.height + 84),
@@ -683,7 +331,9 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
           dayInfo,
           layouts,
           conflictBlockIds: dayConflictBlockIds,
-          conflictMessage: formatConflictMessage(getConflictWeekdays(week, fallbackStartMinutes)),
+          conflictMessage: formatConflictMessage(
+            getConflictWeekdays(week, fallbackStartMinutes),
+          ),
           timelineHeight: dayTimelineHeight,
         }
       }),
@@ -698,8 +348,60 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
 
   useEffect(() => {
     if (isLoading) return
+
+    const mentorProposal = loadMentorRoutineDraft()
+
+    if (mentorProposal) {
+      const nextRoutine = createRoutineFromMentorProposal(
+        mentorProposal,
+        routine,
+      )
+
+      clearMentorRoutineDraft()
+      setDraftRoutine(nextRoutine)
+      setUndoStack([JSON.parse(JSON.stringify(routine)) as Routine])
+      setRedoStack([])
+      setIsSaved(false)
+      return
+    }
+
     setDraftRoutine(routine)
   }, [isLoading, routine])
+
+  useEffect(() => {
+    if (isLoading) return
+
+    const handleMentorRoutineDraft = () => {
+      const mentorProposal = loadMentorRoutineDraft()
+      if (!mentorProposal) return
+
+      const previousRoutine = draftRoutine ?? routine
+      const nextRoutine = createRoutineFromMentorProposal(
+        mentorProposal,
+        routine,
+      )
+
+      clearMentorRoutineDraft()
+      setDraftRoutine(nextRoutine)
+      setUndoStack([JSON.parse(JSON.stringify(previousRoutine)) as Routine])
+      setRedoStack([])
+      setSelectedDateKey(getTodayDateKey())
+      setOpenMenuBlockId(null)
+      setEditing(null)
+      setDeleteConfirmation(null)
+      setIsSaved(false)
+    }
+
+    window.addEventListener(
+      STORAGE_EVENTS.mentorRoutineDraftChanged,
+      handleMentorRoutineDraft,
+    )
+    return () =>
+      window.removeEventListener(
+        STORAGE_EVENTS.mentorRoutineDraftChanged,
+        handleMentorRoutineDraft,
+      )
+  }, [draftRoutine, isLoading, routine])
 
   useEffect(() => {
     if (!draftRoutine) return
@@ -734,42 +436,19 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
     return () => document.removeEventListener("pointerdown", handlePointerDown)
   }, [openMenuBlockId])
 
+  // As refs precisam ser lidas no instante do unmount, pois seus valores mudam durante a interação.
   useEffect(() => {
     return () => {
-      if (toastTimerRef.current !== null) {
-        window.clearTimeout(toastTimerRef.current)
-      }
-
-      if (mobileSwipeTimeoutRef.current !== null) {
-        window.clearTimeout(mobileSwipeTimeoutRef.current)
-      }
-
-      if (mobileSwipeAnimationFrameRef.current !== null) {
-        window.cancelAnimationFrame(mobileSwipeAnimationFrameRef.current)
-      }
-
-      if (mobileBlockPickerCloseTimeoutRef.current !== null) {
-        window.clearTimeout(mobileBlockPickerCloseTimeoutRef.current)
-      }
-
-      if (mobilePaletteLongPressTimerRef.current !== null) {
-        window.clearTimeout(mobilePaletteLongPressTimerRef.current)
-      }
-
-      if (mobilePaletteDragFrameRef.current !== null) {
-        window.cancelAnimationFrame(mobilePaletteDragFrameRef.current)
-      }
-
-      if (mobileRoutineBlockLongPressTimerRef.current !== null) {
-        window.clearTimeout(mobileRoutineBlockLongPressTimerRef.current)
-      }
-
-      if (mobileRoutineBlockDragFrameRef.current !== null) {
-        window.cancelAnimationFrame(mobileRoutineBlockDragFrameRef.current)
-      }
-
-      mobilePaletteDragCleanupRef.current?.()
-      mobileRoutineBlockDragCleanupRef.current?.()
+      clearTimeoutRef(toastTimerRef)
+      clearTimeoutRef(mobileSwipeTimeoutRef)
+      cancelAnimationFrameRef(mobileSwipeAnimationFrameRef)
+      clearTimeoutRef(mobileBlockPickerCloseTimeoutRef)
+      clearTimeoutRef(mobilePaletteLongPressTimerRef)
+      cancelAnimationFrameRef(mobilePaletteDragFrameRef)
+      clearTimeoutRef(mobileRoutineBlockLongPressTimerRef)
+      cancelAnimationFrameRef(mobileRoutineBlockDragFrameRef)
+      runCleanupRef(mobilePaletteDragCleanupRef)
+      runCleanupRef(mobileRoutineBlockDragCleanupRef)
     }
   }, [])
 
@@ -784,7 +463,11 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
     const workspace = workspaceScrollRef.current
     const autoScrollKey = `${selectedDateKey}-${viewportTick}`
 
-    if (!workspace || !draftWeek || autoScrollDateKeyRef.current === autoScrollKey) {
+    if (
+      !workspace ||
+      !draftWeek ||
+      autoScrollDateKeyRef.current === autoScrollKey
+    ) {
       return
     }
 
@@ -811,12 +494,15 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
           ? timelineRange.startMinutes
           : Math.max(
               timelineRange.startMinutes,
-              Math.floor((firstBlockStart - INITIAL_SCROLL_OFFSET_MINUTES) / 60) * 60,
+              Math.floor(
+                (firstBlockStart - INITIAL_SCROLL_OFFSET_MINUTES) / 60,
+              ) * 60,
             )
       const nextTop =
         firstBlockStart === null
           ? 0
-          : TIMELINE_HEADER_HEIGHT + minutesToTimelineTop(targetStartMinutes, timelineRange.startMinutes)
+          : TIMELINE_HEADER_HEIGHT +
+            minutesToTimelineTop(targetStartMinutes, timelineRange.startMinutes)
 
       workspace.scrollTo({
         left: Math.max(0, nextLeft),
@@ -824,50 +510,79 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
         behavior: "auto",
       })
     })
-  }, [draftWeek, firstRoutineBlockStartMinutes, selectedDateKey, timelineRange.startMinutes, viewportTick])
+  }, [
+    draftWeek,
+    firstRoutineBlockStartMinutes,
+    selectedDateKey,
+    timelineRange.startMinutes,
+    viewportTick,
+  ])
 
   useEffect(() => {
     const mobileTimeline = mobileTimelineScrollRef.current
     const autoScrollKey = `${selectedDateKey}-${viewportTick}`
 
-    if (!mobileTimeline || !draftWeek || mobileAutoScrollDateKeyRef.current === autoScrollKey) {
+    if (
+      !mobileTimeline ||
+      !draftWeek ||
+      mobileAutoScrollDateKeyRef.current === autoScrollKey
+    ) {
       return
     }
 
     mobileAutoScrollDateKeyRef.current = autoScrollKey
 
     window.requestAnimationFrame(() => {
-      const firstBlockStart =
-        selectedDay?.blocks.length
-          ? Math.min(
-              ...selectedDay.blocks.map((block) =>
-                getBlockStartMinutes(block, fallbackStartMinutes),
-              ),
-            )
-          : null
+      const firstBlockStart = selectedDay?.blocks.length
+        ? Math.min(
+            ...selectedDay.blocks.map((block) =>
+              getBlockStartMinutes(block, fallbackStartMinutes),
+            ),
+          )
+        : null
       const targetStartMinutes =
         firstBlockStart === null
           ? timelineRange.startMinutes
           : Math.max(
               timelineRange.startMinutes,
-              Math.floor((firstBlockStart - INITIAL_SCROLL_OFFSET_MINUTES) / 60) * 60,
+              Math.floor(
+                (firstBlockStart - INITIAL_SCROLL_OFFSET_MINUTES) / 60,
+              ) * 60,
             )
 
       mobileTimeline.scrollTo({
         top:
           firstBlockStart === null
             ? 0
-            : Math.max(0, minutesToTimelineTop(targetStartMinutes, timelineRange.startMinutes) - 20),
+            : Math.max(
+                0,
+                minutesToTimelineTop(
+                  targetStartMinutes,
+                  timelineRange.startMinutes,
+                ) - 20,
+              ),
         behavior: "auto",
       })
     })
-  }, [draftWeek, fallbackStartMinutes, selectedDateKey, selectedDay, timelineRange.startMinutes, viewportTick])
+  }, [
+    draftWeek,
+    fallbackStartMinutes,
+    selectedDateKey,
+    selectedDay,
+    timelineRange.startMinutes,
+    viewportTick,
+  ])
 
-  const getRoutineWithCurrentDraftWeek = (baseRoutine: Routine = activeDraftRoutine) => {
-    return draftWeek ? upsertRoutineWeek(baseRoutine, cloneRoutineWeek(draftWeek)) : baseRoutine
+  const getRoutineWithCurrentDraftWeek = (
+    baseRoutine: Routine = activeDraftRoutine,
+  ) => {
+    return draftWeek
+      ? upsertRoutineWeek(baseRoutine, cloneRoutineWeek(draftWeek))
+      : baseRoutine
   }
 
-  const cloneRoutineSnapshot = (snapshot: Routine): Routine => JSON.parse(JSON.stringify(snapshot)) as Routine
+  const cloneRoutineSnapshot = (snapshot: Routine): Routine =>
+    JSON.parse(JSON.stringify(snapshot)) as Routine
 
   const applyRoutineSnapshot = (snapshot: Routine) => {
     const nextSnapshot = cloneRoutineSnapshot(snapshot)
@@ -877,8 +592,12 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
     setIsSaved(JSON.stringify(nextSnapshot) === JSON.stringify(routine))
   }
 
-  const pushUndoSnapshot = (snapshot: Routine = getRoutineWithCurrentDraftWeek()) => {
-    setUndoStack((current) => [...current, cloneRoutineSnapshot(snapshot)].slice(-30))
+  const pushUndoSnapshot = (
+    snapshot: Routine = getRoutineWithCurrentDraftWeek(),
+  ) => {
+    setUndoStack((current) =>
+      [...current, cloneRoutineSnapshot(snapshot)].slice(-30),
+    )
     setRedoStack([])
   }
 
@@ -889,7 +608,9 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
     const currentSnapshot = getRoutineWithCurrentDraftWeek()
 
     setUndoStack((current) => current.slice(0, -1))
-    setRedoStack((current) => [...current, cloneRoutineSnapshot(currentSnapshot)].slice(-30))
+    setRedoStack((current) =>
+      [...current, cloneRoutineSnapshot(currentSnapshot)].slice(-30),
+    )
     applyRoutineSnapshot(previousSnapshot)
     showToast({ message: "Alteração desfeita." })
   }
@@ -901,7 +622,9 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
     const currentSnapshot = getRoutineWithCurrentDraftWeek()
 
     setRedoStack((current) => current.slice(0, -1))
-    setUndoStack((current) => [...current, cloneRoutineSnapshot(currentSnapshot)].slice(-30))
+    setUndoStack((current) =>
+      [...current, cloneRoutineSnapshot(currentSnapshot)].slice(-30),
+    )
     applyRoutineSnapshot(nextSnapshot)
     showToast({ message: "Alteração refeita." })
   }
@@ -910,63 +633,64 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
     setToast(null)
   }
 
-
-  const syncRecurringSeriesFromCurrentWeek = (routineToSync: Routine): Routine => {
+  const syncRecurringSeriesFromCurrentWeek = (
+    routineToSync: Routine,
+  ): Routine => {
     if (!draftWeek) return routineToSync
 
-    const recurringBlocks = draftWeek.days.flatMap((day) =>
-      day.blocks.flatMap((block) =>
-        block.repeatSourceId ? [{ weekday: day.weekday, block }] : [],
-      ),
-    )
+    const templatesBySeries = new Map<string, Map<Weekday, RoutineBlock>>()
 
-    if (recurringBlocks.length === 0) return routineToSync
+    draftWeek.days.forEach((day) => {
+      day.blocks.forEach((block) => {
+        if (!block.repeatSourceId) return
 
-    return recurringBlocks.reduce((currentRoutine, { weekday, block }) => {
-      const repeatSourceId = block.repeatSourceId
-      if (!repeatSourceId) return currentRoutine
+        const templates =
+          templatesBySeries.get(block.repeatSourceId) ??
+          new Map<Weekday, RoutineBlock>()
+        templates.set(day.weekday, block)
+        templatesBySeries.set(block.repeatSourceId, templates)
+      })
+    })
 
-      const sourceStartMinutes = getBlockStartMinutes(block, fallbackStartMinutes)
-      const sourceBlock = setBlockStartTime({ ...block, repeatSourceId }, sourceStartMinutes)
-      const weeks = currentRoutine.weeks ?? []
+    if (templatesBySeries.size === 0) return routineToSync
 
-      return {
-        ...currentRoutine,
-        weeks: weeks.map((week) => {
-          const existingBlock = week.days
-            .flatMap((day) => day.blocks)
-            .find((candidate) => candidate.repeatSourceId === repeatSourceId)
+    return {
+      ...routineToSync,
+      weeks: (routineToSync.weeks ?? []).map((week) => ({
+        ...week,
+        days: week.days.map((day) => {
+          let changed = false
+          const blocks = day.blocks.map((candidate) => {
+            const repeatSourceId = candidate.repeatSourceId
+            if (!repeatSourceId) return candidate
 
-          if (!existingBlock) return week
+            const template = templatesBySeries
+              .get(repeatSourceId)
+              ?.get(day.weekday)
+            if (!template) return candidate
+
+            changed = true
+            return setBlockStartTime(
+              { ...template, id: candidate.id, repeatSourceId },
+              getBlockStartMinutes(template, fallbackStartMinutes),
+            )
+          })
+
+          if (!changed) return day
+
+          const normalizedBlocks = sortRoutineDayBlocksByTime(
+            blocks,
+            fallbackStartMinutes,
+          )
 
           return {
-            ...week,
-            days: week.days.map((day) => {
-              const remainingBlocks = day.blocks.filter(
-                (candidate) => candidate.repeatSourceId !== repeatSourceId,
-              )
-              const nextBlocks =
-                day.weekday === weekday
-                  ? [
-                      ...remainingBlocks,
-                      {
-                        ...sourceBlock,
-                        id: existingBlock.id,
-                      },
-                    ]
-                  : remainingBlocks
-              const normalizedBlocks = sortRoutineDayBlocksByTime(nextBlocks, fallbackStartMinutes)
-
-              return {
-                ...day,
-                blocks: normalizedBlocks,
-                isActive: normalizedBlocks.length > 0,
-              }
-            }),
+            ...day,
+            blocks: normalizedBlocks,
+            isActive: normalizedBlocks.length > 0,
           }
         }),
-      }
-    }, routineToSync)
+      })),
+    }
   }
 
   const moveWeek = (direction: -1 | 1) => {
@@ -992,7 +716,9 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
 
   const shouldIgnoreMobileSwipeTarget = (target: EventTarget | null) => {
     return target instanceof Element
-      ? Boolean(target.closest("button, a, input, textarea, select, [role='button']"))
+      ? Boolean(
+          target.closest("button, a, input, textarea, select, [role='button']"),
+        )
       : false
   }
 
@@ -1025,7 +751,9 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
       const track = mobileSwipeTrackRef.current
 
       if (track) {
-        track.style.transform = getMobileSwipeTransform(mobileDaySwipeOffsetRef.current)
+        track.style.transform = getMobileSwipeTransform(
+          mobileDaySwipeOffsetRef.current,
+        )
       }
 
       mobileSwipeAnimationFrameRef.current = null
@@ -1044,7 +772,8 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
   }
 
   const getMobileSwipeWidth = () =>
-    mobileSwipeContainerRef.current?.getBoundingClientRect().width ?? window.innerWidth
+    mobileSwipeContainerRef.current?.getBoundingClientRect().width ??
+    window.innerWidth
 
   const handleMobileSwipeStart = (event: ReactPointerEvent<HTMLElement>) => {
     if (event.pointerType === "mouse" && event.button !== 0) return
@@ -1119,7 +848,8 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
     const deltaX = swipeStart.deltaX || event.clientX - swipeStart.x
     const horizontalDistance = Math.abs(deltaX)
     const swipeWidth = getMobileSwipeWidth()
-    const shouldChangeDay = horizontalDistance >= Math.min(80, swipeWidth * 0.22)
+    const shouldChangeDay =
+      horizontalDistance >= Math.min(80, swipeWidth * 0.22)
 
     setMobileSwipeTrackTransition(true)
 
@@ -1142,14 +872,20 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
     finishMobileSwipeAnimation()
   }
 
-  const updateDraftDay = (weekday: Weekday, updater: (day: RoutineDay) => RoutineDay) => {
+  const updateDraftDay = (
+    weekday: Weekday,
+    updater: (day: RoutineDay) => RoutineDay,
+  ) => {
     if (!draftWeek) return
 
     pushUndoSnapshot()
 
     const nextWeek = updateRoutineWeekDay(draftWeek, weekday, (day) => {
       const updatedDay = updater(day)
-      const normalizedBlocks = sortRoutineDayBlocksByTime(updatedDay.blocks, fallbackStartMinutes)
+      const normalizedBlocks = sortRoutineDayBlocksByTime(
+        updatedDay.blocks,
+        fallbackStartMinutes,
+      )
 
       return {
         ...updatedDay,
@@ -1161,29 +897,11 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
     setIsSaved(false)
   }
 
-  const openCreateDialog = (
-    type: RoutineBlockType,
-    weekday: Weekday = selectedWeekday,
-    startMinutes = fallbackStartMinutes,
-  ) => {
-    const defaults = getEditingDefaults(type)
-
-    setOpenMenuBlockId(null)
-    setIsMobileBlockPickerOpen(false)
-    setIsMobileBlockPickerVisible(false)
-    setEditing({
-      mode: "create",
-      weekday,
-      type,
-      title: defaults.title,
-      description: "",
-      durationMinutes: defaults.durationMinutes,
-      startTime: formatTimeLabel(clampMinutes(startMinutes)),
-      repeatMode: "none",
-    })
-  }
-
   const openEditDialog = (block: RoutineBlock, weekday: Weekday) => {
+    editingReturnFocusRef.current =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null
     setOpenMenuBlockId(null)
     setEditing({
       mode: "edit",
@@ -1198,7 +916,55 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
     })
   }
 
-  const closeEditing = () => setEditing(null)
+  const closeEditing = () => {
+    setEditing(null)
+    window.requestAnimationFrame(() => {
+      editingReturnFocusRef.current?.focus()
+      editingReturnFocusRef.current = null
+    })
+  }
+
+  const handleEditingDialogKeyDown = (
+    event: ReactKeyboardEvent<HTMLDivElement>,
+  ) => {
+    if (event.key === "Escape") {
+      event.preventDefault()
+      closeEditing()
+      return
+    }
+
+    if (event.key !== "Tab") return
+
+    const dialog = editingDialogRef.current
+    if (!dialog) return
+
+    const focusableElements = Array.from(
+      dialog.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])',
+      ),
+    ).filter(
+      (element) =>
+        element.getAttribute("aria-hidden") !== "true" &&
+        element.getClientRects().length > 0,
+    )
+
+    if (focusableElements.length === 0) {
+      event.preventDefault()
+      dialog.focus()
+      return
+    }
+
+    const firstElement = focusableElements[0]
+    const lastElement = focusableElements[focusableElements.length - 1]
+
+    if (event.shiftKey && document.activeElement === firstElement) {
+      event.preventDefault()
+      lastElement.focus()
+    } else if (!event.shiftKey && document.activeElement === lastElement) {
+      event.preventDefault()
+      firstElement.focus()
+    }
+  }
 
   const handleSelectEditingType = (type: RoutineBlockType) => {
     const defaults = getEditingDefaults(type)
@@ -1221,19 +987,30 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
   const getRepeatTargetDateKeys = (editingState: EditingState): string[] => {
     if (!draftWeek || editingState.repeatMode === "none") return []
 
-    const sourceDateKey = getDateKeyForWeekdayInWeek(draftWeek.weekStartDate, editingState.weekday)
+    const sourceDateKey = getDateKeyForWeekdayInWeek(
+      draftWeek.weekStartDate,
+      editingState.weekday,
+    )
     const sourceDate = parseDateKey(sourceDateKey)
 
     if (editingState.repeatMode === "week-daily") {
-      return WEEK_DAYS.map((day) => getDateKeyForWeekdayInWeek(draftWeek.weekStartDate, day.key))
+      return WEEK_DAYS.map((day) =>
+        getDateKeyForWeekdayInWeek(draftWeek.weekStartDate, day.key),
+      )
     }
 
     if (editingState.repeatMode === "month-daily") {
-      return getMonthDateKeys(selectedDate.getFullYear(), selectedDate.getMonth())
+      return getMonthDateKeys(
+        selectedDate.getFullYear(),
+        selectedDate.getMonth(),
+      )
     }
 
     if (editingState.repeatMode === "month-weekday") {
-      return getMonthDateKeys(selectedDate.getFullYear(), selectedDate.getMonth()).filter(
+      return getMonthDateKeys(
+        selectedDate.getFullYear(),
+        selectedDate.getMonth(),
+      ).filter(
         (dateKey) => getWeekdayFromDateKey(dateKey) === editingState.weekday,
       )
     }
@@ -1245,35 +1022,54 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
     return [toDateKey(sourceDate)]
   }
 
-  const applyRepeatedBlock = (sourceBlock: RoutineBlock, targetDateKeys: string[]) => {
+  const applyRepeatedBlock = (
+    sourceBlock: RoutineBlock,
+    targetDateKeys: string[],
+  ) => {
     if (!editing || !draftWeek || targetDateKeys.length === 0) return
 
     pushUndoSnapshot()
 
-    const repeatSourceId = sourceBlock.repeatSourceId ?? `repeat-${sourceBlock.id}`
-    const sourceDateKey = getDateKeyForWeekdayInWeek(draftWeek.weekStartDate, editing.weekday)
+    const repeatSourceId =
+      sourceBlock.repeatSourceId ?? `repeat-${sourceBlock.id}`
+    const sourceDateKey = getDateKeyForWeekdayInWeek(
+      draftWeek.weekStartDate,
+      editing.weekday,
+    )
 
     const nextRoutine = targetDateKeys.reduce((currentRoutine, dateKey) => {
       const targetWeekday = getWeekdayFromDateKey(dateKey)
       const targetWeek = createRoutineWeekFromDate(dateKey, currentRoutine)
       const targetBlock: RoutineBlock = {
         ...sourceBlock,
-        id: dateKey === sourceDateKey ? sourceBlock.id : createId(`block-${targetWeekday}`),
+        id:
+          dateKey === sourceDateKey
+            ? sourceBlock.id
+            : createId(`block-${targetWeekday}`),
         repeatSourceId,
       }
 
-      const updatedWeek = updateRoutineWeekDay(targetWeek, targetWeekday, (day) => {
-        const blocks = day.blocks.filter(
-          (block) => block.id !== sourceBlock.id && block.repeatSourceId !== repeatSourceId,
-        )
-        const normalizedBlocks = sortRoutineDayBlocksByTime([...blocks, targetBlock], fallbackStartMinutes)
+      const updatedWeek = updateRoutineWeekDay(
+        targetWeek,
+        targetWeekday,
+        (day) => {
+          const blocks = day.blocks.filter(
+            (block) =>
+              block.id !== sourceBlock.id &&
+              block.repeatSourceId !== repeatSourceId,
+          )
+          const normalizedBlocks = sortRoutineDayBlocksByTime(
+            [...blocks, targetBlock],
+            fallbackStartMinutes,
+          )
 
-        return {
-          ...day,
-          blocks: normalizedBlocks,
-          isActive: normalizedBlocks.length > 0,
-        }
-      })
+          return {
+            ...day,
+            blocks: normalizedBlocks,
+            isActive: normalizedBlocks.length > 0,
+          }
+        },
+      )
 
       return upsertRoutineWeek(currentRoutine, updatedWeek)
     }, getRoutineWithCurrentDraftWeek())
@@ -1286,13 +1082,21 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
   const handleSaveBlock = () => {
     if (!editing) return
 
-    const startMinutes = timeToMinutes(editing.startTime) ?? fallbackStartMinutes
-    const normalizedDuration = Math.max(1, Math.floor(editing.durationMinutes || 1))
+    const startMinutes =
+      timeToMinutes(editing.startTime) ?? fallbackStartMinutes
+    const normalizedDuration = Math.max(
+      1,
+      Math.floor(editing.durationMinutes || 1),
+    )
     const normalizedDescription = editing.description.trim() || undefined
 
     if (editing.mode === "edit") {
-      const currentDay = draftWeek ? getRoutineWeekDay(draftWeek, editing.weekday) : null
-      const currentBlock = currentDay?.blocks.find((block) => block.id === editing.blockId)
+      const currentDay = draftWeek
+        ? getRoutineWeekDay(draftWeek, editing.weekday)
+        : null
+      const currentBlock = currentDay?.blocks.find(
+        (block) => block.id === editing.blockId,
+      )
 
       if (!currentBlock) {
         closeEditing()
@@ -1302,12 +1106,14 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
       const repeatSourceId =
         editing.repeatMode === "none"
           ? currentBlock.repeatSourceId
-          : currentBlock.repeatSourceId ?? `repeat-${currentBlock.id}`
+          : (currentBlock.repeatSourceId ?? `repeat-${currentBlock.id}`)
       const updatedBlock = setBlockStartTime(
         {
           ...currentBlock,
           type: editing.type,
-          title: editing.title.trim() || getBuilderBlockOption(editing.type).defaultTitle,
+          title:
+            editing.title.trim() ||
+            getBuilderBlockOption(editing.type).defaultTitle,
           description: normalizedDescription,
           durationMinutes: normalizedDuration,
           repeatSourceId,
@@ -1323,14 +1129,19 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
 
       updateDraftDay(editing.weekday, (day) => ({
         ...day,
-        blocks: day.blocks.map((block) => (block.id === editing.blockId ? updatedBlock : block)),
+        blocks: day.blocks.map((block) =>
+          block.id === editing.blockId ? updatedBlock : block,
+        ),
       }))
 
       closeEditing()
       return
     }
 
-    const block = setBlockStartTime(createBlockFromEditing(editing), startMinutes)
+    const block = setBlockStartTime(
+      createBlockFromEditing(editing),
+      startMinutes,
+    )
 
     if (editing.repeatMode !== "none") {
       applyRepeatedBlock(block, getRepeatTargetDateKeys(editing))
@@ -1383,7 +1194,9 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
       weeks: currentRoutine.weeks?.map((week) => ({
         ...week,
         days: week.days.map((day) => {
-          const blocks = day.blocks.filter((block) => block.repeatSourceId !== repeatSourceId)
+          const blocks = day.blocks.filter(
+            (block) => block.repeatSourceId !== repeatSourceId,
+          )
 
           return {
             ...day,
@@ -1416,7 +1229,8 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
     updateDraftDay(weekday, (day) => {
       const currentIndex = day.blocks.findIndex((block) => block.id === blockId)
       const nextIndex = currentIndex + direction
-      if (currentIndex < 0 || nextIndex < 0 || nextIndex >= day.blocks.length) return day
+      if (currentIndex < 0 || nextIndex < 0 || nextIndex >= day.blocks.length)
+        return day
 
       const blocks = [...day.blocks]
       const [block] = blocks.splice(currentIndex, 1)
@@ -1473,7 +1287,8 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
         return
       }
 
-      const maxScrollTop = currentWorkspace.scrollHeight - currentWorkspace.clientHeight
+      const maxScrollTop =
+        currentWorkspace.scrollHeight - currentWorkspace.clientHeight
       currentWorkspace.scrollTop = Math.min(
         Math.max(currentWorkspace.scrollTop + speed, 0),
         Math.max(0, maxScrollTop),
@@ -1495,7 +1310,11 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
     dragStartOffsetMinutesRef.current = 0
   }
 
-  const createBlockFromType = (type: RoutineBlockType, weekday: Weekday, startMinutes: number): RoutineBlock => {
+  const createBlockFromType = (
+    type: RoutineBlockType,
+    weekday: Weekday,
+    startMinutes: number,
+  ): RoutineBlock => {
     const defaults = getEditingDefaults(type)
 
     return setBlockStartTime(
@@ -1520,7 +1339,12 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
     }))
   }
 
-  const moveBlockToDay = (sourceWeekday: Weekday, blockId: string, targetWeekday: Weekday, startMinutes: number) => {
+  const moveBlockToDay = (
+    sourceWeekday: Weekday,
+    blockId: string,
+    targetWeekday: Weekday,
+    startMinutes: number,
+  ) => {
     if (!draftWeek) return
 
     pushUndoSnapshot()
@@ -1533,22 +1357,34 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
     const blockToInsert = setBlockStartTime(
       {
         ...movedBlock,
-        id: sourceWeekday === targetWeekday ? movedBlock.id : createId(`block-${targetWeekday}`),
+        id:
+          sourceWeekday === targetWeekday
+            ? movedBlock.id
+            : createId(`block-${targetWeekday}`),
       },
       startMinutes,
     )
 
     const withMovedBlock = draftWeek.days.reduce((currentWeek, currentDay) => {
-      if (currentDay.weekday !== sourceWeekday && currentDay.weekday !== targetWeekday) {
+      if (
+        currentDay.weekday !== sourceWeekday &&
+        currentDay.weekday !== targetWeekday
+      ) {
         return currentWeek
       }
 
       return updateRoutineWeekDay(currentWeek, currentDay.weekday, (day) => {
-        const withoutMovedBlock = day.blocks.filter((block) => block.id !== blockId)
-        const blocks = currentDay.weekday === targetWeekday
-          ? [...withoutMovedBlock, blockToInsert]
-          : withoutMovedBlock
-        const normalizedBlocks = sortRoutineDayBlocksByTime(blocks, fallbackStartMinutes)
+        const withoutMovedBlock = day.blocks.filter(
+          (block) => block.id !== blockId,
+        )
+        const blocks =
+          currentDay.weekday === targetWeekday
+            ? [...withoutMovedBlock, blockToInsert]
+            : withoutMovedBlock
+        const normalizedBlocks = sortRoutineDayBlocksByTime(
+          blocks,
+          fallbackStartMinutes,
+        )
 
         return {
           ...day,
@@ -1566,10 +1402,16 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
 
   const getDraggedBlockDuration = (payload: DragPayload | null): number => {
     if (!payload) return getEditingDefaults("study").durationMinutes
-    if (payload.kind === "palette") return getEditingDefaults(payload.blockType).durationMinutes
+    if (payload.kind === "palette")
+      return getEditingDefaults(payload.blockType).durationMinutes
 
-    const sourceDay = draftWeek ? getRoutineWeekDay(draftWeek, payload.sourceWeekday) : null
-    return sourceDay?.blocks.find((block) => block.id === payload.blockId)?.durationMinutes ?? getEditingDefaults("study").durationMinutes
+    const sourceDay = draftWeek
+      ? getRoutineWeekDay(draftWeek, payload.sourceWeekday)
+      : null
+    return (
+      sourceDay?.blocks.find((block) => block.id === payload.blockId)
+        ?.durationMinutes ?? getEditingDefaults("study").durationMinutes
+    )
   }
 
   const getSnapResult = (
@@ -1598,15 +1440,13 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
       const blockStart = getBlockStartMinutes(block, fallbackStartMinutes)
       const blockEnd = getBlockEndMinutes(block, fallbackStartMinutes)
 
-      return [
-        blockStart,
-        blockEnd + 1,
-        blockStart - duration - 1,
-      ]
+      return [blockStart, blockEnd + 1, blockStart - duration - 1]
     })
 
     const validCandidates = candidates
-      .map((candidate) => clampMinutes(candidate, timelineRange.startMinutes, maxStartMinutes))
+      .map((candidate) =>
+        clampMinutes(candidate, timelineRange.startMinutes, maxStartMinutes),
+      )
       .filter((candidate, index, list) => list.indexOf(candidate) === index)
 
     if (validCandidates.length === 0) return { minutes, snapped: false }
@@ -1625,11 +1465,15 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
     return { minutes, snapped: false }
   }
 
-  const getDragMinutesFromEvent = (event: DragEvent<HTMLElement>, durationMinutes = 1): number | null => {
+  const getDragMinutesFromEvent = (
+    event: DragEvent<HTMLElement>,
+    durationMinutes = 1,
+  ): number | null => {
     const currentTarget = event.currentTarget as HTMLElement
-    const laneElement = currentTarget.dataset.routineDayLane === "true"
-      ? currentTarget
-      : currentTarget.closest<HTMLElement>("[data-routine-day-lane='true']")
+    const laneElement =
+      currentTarget.dataset.routineDayLane === "true"
+        ? currentTarget
+        : currentTarget.closest<HTMLElement>("[data-routine-day-lane='true']")
 
     if (!laneElement) return null
 
@@ -1646,10 +1490,18 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
       timelineRange.endMinutes - Math.max(1, durationMinutes),
     )
 
-    return clampMinutes(adjustedMinutes, timelineRange.startMinutes, maxStartMinutes)
+    return clampMinutes(
+      adjustedMinutes,
+      timelineRange.startMinutes,
+      maxStartMinutes,
+    )
   }
 
-  const updateDragPreview = (event: DragEvent<HTMLElement>, weekday: Weekday, payload: DragPayload | null = draggingPayload) => {
+  const updateDragPreview = (
+    event: DragEvent<HTMLElement>,
+    weekday: Weekday,
+    payload: DragPayload | null = draggingPayload,
+  ) => {
     const durationMinutes = getDraggedBlockDuration(payload)
     const rawMinutes = getDragMinutesFromEvent(event, durationMinutes)
 
@@ -1658,7 +1510,12 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
       return null
     }
 
-    const snapResult = getSnapResult(rawMinutes, weekday, durationMinutes, payload)
+    const snapResult = getSnapResult(
+      rawMinutes,
+      weekday,
+      durationMinutes,
+      payload,
+    )
 
     setDragPreview({
       weekday,
@@ -1671,7 +1528,10 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
     return snapResult.minutes
   }
 
-  const handlePaletteDragStart = (event: DragEvent<HTMLButtonElement>, blockType: RoutineBlockType) => {
+  const handlePaletteDragStart = (
+    event: DragEvent<HTMLButtonElement>,
+    blockType: RoutineBlockType,
+  ) => {
     const payload: DragPayload = { kind: "palette", blockType }
 
     event.dataTransfer.effectAllowed = "copy"
@@ -1684,7 +1544,10 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
   }
 
   const handlePaletteClick = (type: RoutineBlockType) => {
-    insertBlockIntoDay(selectedWeekday, createBlockFromType(type, selectedWeekday, fallbackStartMinutes))
+    insertBlockIntoDay(
+      selectedWeekday,
+      createBlockFromType(type, selectedWeekday, fallbackStartMinutes),
+    )
   }
 
   const resetMobileBlockPickerSheetMotion = () => {
@@ -1751,7 +1614,9 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
     }, MOBILE_BLOCK_PICKER_TRANSITION_MS)
   }
 
-  const handleMobileBlockPickerPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+  const handleMobileBlockPickerPointerDown = (
+    event: ReactPointerEvent<HTMLDivElement>,
+  ) => {
     if (event.pointerType === "mouse" && event.button !== 0) return
 
     event.stopPropagation()
@@ -1766,7 +1631,9 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
     event.currentTarget.setPointerCapture(event.pointerId)
   }
 
-  const handleMobileBlockPickerPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+  const handleMobileBlockPickerPointerMove = (
+    event: ReactPointerEvent<HTMLDivElement>,
+  ) => {
     const dragState = mobileBlockPickerDragRef.current
 
     if (!dragState || dragState.pointerId !== event.pointerId) return
@@ -1791,7 +1658,9 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
     sheet.style.transform = `translate3d(0, ${Math.min(deltaY, 340)}px, 0)`
   }
 
-  const handleMobileBlockPickerPointerEnd = (event: ReactPointerEvent<HTMLDivElement>) => {
+  const handleMobileBlockPickerPointerEnd = (
+    event: ReactPointerEvent<HTMLDivElement>,
+  ) => {
     const dragState = mobileBlockPickerDragRef.current
 
     if (!dragState || dragState.pointerId !== event.pointerId) return
@@ -1803,7 +1672,9 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
       event.currentTarget.releasePointerCapture(event.pointerId)
     }
 
-    const shouldClose = dragState.isDragging && dragState.deltaY >= MOBILE_BLOCK_PICKER_CLOSE_THRESHOLD_PX
+    const shouldClose =
+      dragState.isDragging &&
+      dragState.deltaY >= MOBILE_BLOCK_PICKER_CLOSE_THRESHOLD_PX
 
     if (shouldClose) {
       event.preventDefault()
@@ -1829,7 +1700,9 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
     }
   }
 
-  const handleMobileBlockPickerClickCapture = (event: ReactMouseEvent<HTMLDivElement>) => {
+  const handleMobileBlockPickerClickCapture = (
+    event: ReactMouseEvent<HTMLDivElement>,
+  ) => {
     if (!mobileBlockPickerIgnoreClickRef.current) return
 
     event.preventDefault()
@@ -1884,10 +1757,25 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
       timelineRange.startMinutes,
       timelineRange.endMinutes,
     )
-    const maxStartMinutes = Math.max(timelineRange.startMinutes, timelineRange.endMinutes - durationMinutes)
-    const steppedMinutes = snapMinutesToStep(rawMinutes, MOBILE_PALETTE_DROP_STEP_MINUTES)
-    const startMinutes = clampMinutes(steppedMinutes, timelineRange.startMinutes, maxStartMinutes)
-    const snapResult = getSnapResult(startMinutes, selectedWeekday, durationMinutes, payload)
+    const maxStartMinutes = Math.max(
+      timelineRange.startMinutes,
+      timelineRange.endMinutes - durationMinutes,
+    )
+    const steppedMinutes = snapMinutesToStep(
+      rawMinutes,
+      MOBILE_PALETTE_DROP_STEP_MINUTES,
+    )
+    const startMinutes = clampMinutes(
+      steppedMinutes,
+      timelineRange.startMinutes,
+      maxStartMinutes,
+    )
+    const snapResult = getSnapResult(
+      startMinutes,
+      selectedWeekday,
+      durationMinutes,
+      payload,
+    )
 
     return {
       minutes: snapResult.minutes,
@@ -1895,17 +1783,29 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
     }
   }
 
-  const getMobilePaletteDropResult = (clientX: number, clientY: number, blockType: RoutineBlockType) => {
+  const getMobilePaletteDropResult = (
+    clientX: number,
+    clientY: number,
+    blockType: RoutineBlockType,
+  ) => {
     const previewStartY = getMobilePalettePreviewStartClientY(clientY)
     const durationMinutes = getEditingDefaults(blockType).durationMinutes
 
-    return getMobileTimelineDropResult(clientX, previewStartY, durationMinutes, {
-      kind: "palette",
-      blockType,
-    })
+    return getMobileTimelineDropResult(
+      clientX,
+      previewStartY,
+      durationMinutes,
+      {
+        kind: "palette",
+        blockType,
+      },
+    )
   }
 
-  const getMobilePalettePreviewLabel = (minutes: number | null, snapped: boolean) => {
+  const getMobilePalettePreviewLabel = (
+    minutes: number | null,
+    snapped: boolean,
+  ) => {
     if (minutes === null) return "Arraste para um horário"
 
     return `${formatTimeLabel(minutes)}${snapped ? " · encaixado" : ""}`
@@ -1918,7 +1818,11 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
     mobilePaletteDragFrameRef.current = null
   }
 
-  const applyMobilePaletteDragPreview = (clientX: number, clientY: number, blockType: RoutineBlockType) => {
+  const applyMobilePaletteDragPreview = (
+    clientX: number,
+    clientY: number,
+    blockType: RoutineBlockType,
+  ) => {
     const dropResult = getMobilePaletteDropResult(clientX, clientY, blockType)
     const preview = mobilePalettePreviewRef.current
     const timeLabel = mobilePalettePreviewTimeRef.current
@@ -1937,7 +1841,10 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
     }
   }
 
-  const scheduleMobilePaletteDragPreview = (clientX: number, clientY: number, blockType: RoutineBlockType) => {
+  const scheduleMobilePaletteDragPreview = (
+    clientX: number,
+    clientY: number,
+  ) => {
     const dragState = mobilePaletteDragRef.current
 
     if (dragState) {
@@ -1962,7 +1869,11 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
     })
   }
 
-  const showInitialMobilePaletteDragPreview = (clientX: number, clientY: number, blockType: RoutineBlockType) => {
+  const showInitialMobilePaletteDragPreview = (
+    clientX: number,
+    clientY: number,
+    blockType: RoutineBlockType,
+  ) => {
     const dropResult = getMobilePaletteDropResult(clientX, clientY, blockType)
 
     setMobilePaletteDragPreview({
@@ -1991,12 +1902,20 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
 
     if (dragState.isDragging) {
       event.preventDefault()
-      const dropResult = getMobilePaletteDropResult(event.clientX, event.clientY, dragState.blockType)
+      const dropResult = getMobilePaletteDropResult(
+        event.clientX,
+        event.clientY,
+        dragState.blockType,
+      )
 
       if (dropResult) {
         insertBlockIntoDay(
           selectedWeekday,
-          createBlockFromType(dragState.blockType, selectedWeekday, dropResult.minutes),
+          createBlockFromType(
+            dragState.blockType,
+            selectedWeekday,
+            dropResult.minutes,
+          ),
         )
       }
     }
@@ -2025,7 +1944,11 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
     setDraggingPayload({ kind: "palette", blockType: dragState.blockType })
     setOpenMenuBlockId(null)
     closeMobileBlockPickerFromDrag()
-    showInitialMobilePaletteDragPreview(dragState.currentX, dragState.currentY, dragState.blockType)
+    showInitialMobilePaletteDragPreview(
+      dragState.currentX,
+      dragState.currentY,
+      dragState.blockType,
+    )
   }
 
   const handleMobilePaletteBlockPointerDown = (
@@ -2062,7 +1985,10 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
       const deltaY = pointerEvent.clientY - dragState.startY
       const distance = Math.hypot(deltaX, deltaY)
 
-      if (!dragState.isDragging && distance > MOBILE_PALETTE_LONG_PRESS_CANCEL_DISTANCE_PX) {
+      if (
+        !dragState.isDragging &&
+        distance > MOBILE_PALETTE_LONG_PRESS_CANCEL_DISTANCE_PX
+      ) {
         cancelMobilePaletteDrag()
         return
       }
@@ -2070,22 +1996,29 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
       if (!dragState.isDragging) return
 
       pointerEvent.preventDefault()
-      scheduleMobilePaletteDragPreview(pointerEvent.clientX, pointerEvent.clientY, dragState.blockType)
+      scheduleMobilePaletteDragPreview(
+        pointerEvent.clientX,
+        pointerEvent.clientY,
+      )
     }
 
     const handlePointerEnd = (pointerEvent: PointerEvent) => {
-      if (mobilePaletteDragRef.current?.pointerId !== pointerEvent.pointerId) return
+      if (mobilePaletteDragRef.current?.pointerId !== pointerEvent.pointerId)
+        return
 
       finishMobilePaletteDrag(pointerEvent)
     }
 
     const handlePointerCancel = (pointerEvent: PointerEvent) => {
-      if (mobilePaletteDragRef.current?.pointerId !== pointerEvent.pointerId) return
+      if (mobilePaletteDragRef.current?.pointerId !== pointerEvent.pointerId)
+        return
 
       cancelMobilePaletteDrag()
     }
 
-    window.addEventListener("pointermove", handlePointerMove, { passive: false })
+    window.addEventListener("pointermove", handlePointerMove, {
+      passive: false,
+    })
     window.addEventListener("pointerup", handlePointerEnd)
     window.addEventListener("pointercancel", handlePointerCancel)
 
@@ -2113,7 +2046,9 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
     mobileRoutineBlockDragCleanupRef.current = null
   }
 
-  const getMobileRoutineBlockDropResult = (dragState: MobileRoutineBlockDragState) => {
+  const getMobileRoutineBlockDropResult = (
+    dragState: MobileRoutineBlockDragState,
+  ) => {
     const previewStartY = dragState.currentY - dragState.pointerOffsetY
 
     return getMobileTimelineDropResult(
@@ -2128,7 +2063,10 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
     )
   }
 
-  const getMobileRoutineBlockPreviewLabel = (minutes: number | null, snapped: boolean) => {
+  const getMobileRoutineBlockPreviewLabel = (
+    minutes: number | null,
+    snapped: boolean,
+  ) => {
     if (minutes === null) return "Arraste dentro da rotina"
 
     return `${formatTimeLabel(minutes)}${snapped ? " · encaixado" : ""}`
@@ -2154,7 +2092,10 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
     const previewStartY = dragState.currentY - dragState.pointerOffsetY
     const previewCenterY = previewStartY + dragState.blockHeight / 2
     const previewCenterX = laneRect
-      ? Math.min(Math.max(dragState.currentX, laneRect.left + 24), laneRect.right - 24)
+      ? Math.min(
+          Math.max(dragState.currentX, laneRect.left + 24),
+          laneRect.right - 24,
+        )
       : dragState.currentX
 
     if (preview) {
@@ -2171,7 +2112,10 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
     }
   }
 
-  const scheduleMobileRoutineBlockDragPreview = (clientX: number, clientY: number) => {
+  const scheduleMobileRoutineBlockDragPreview = (
+    clientX: number,
+    clientY: number,
+  ) => {
     const dragState = mobileRoutineBlockDragRef.current
 
     if (dragState) {
@@ -2181,17 +2125,21 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
 
     if (mobileRoutineBlockDragFrameRef.current !== null) return
 
-    mobileRoutineBlockDragFrameRef.current = window.requestAnimationFrame(() => {
-      mobileRoutineBlockDragFrameRef.current = null
-      const latestDragState = mobileRoutineBlockDragRef.current
+    mobileRoutineBlockDragFrameRef.current = window.requestAnimationFrame(
+      () => {
+        mobileRoutineBlockDragFrameRef.current = null
+        const latestDragState = mobileRoutineBlockDragRef.current
 
-      if (!latestDragState?.isDragging) return
+        if (!latestDragState?.isDragging) return
 
-      applyMobileRoutineBlockDragPreview()
-    })
+        applyMobileRoutineBlockDragPreview()
+      },
+    )
   }
 
-  const showInitialMobileRoutineBlockDragPreview = (dragState: MobileRoutineBlockDragState) => {
+  const showInitialMobileRoutineBlockDragPreview = (
+    dragState: MobileRoutineBlockDragState,
+  ) => {
     const dropResult = getMobileRoutineBlockDropResult(dragState)
     const previewStartY = dragState.currentY - dragState.pointerOffsetY
 
@@ -2225,7 +2173,12 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
       const dropResult = getMobileRoutineBlockDropResult(dragState)
 
       if (dropResult) {
-        moveBlockToDay(dragState.weekday, dragState.block.id, selectedWeekday, dropResult.minutes)
+        moveBlockToDay(
+          dragState.weekday,
+          dragState.block.id,
+          selectedWeekday,
+          dropResult.minutes,
+        )
       }
     }
 
@@ -2288,7 +2241,10 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
       startY: event.clientY,
       currentX: event.clientX,
       currentY: event.clientY,
-      pointerOffsetY: Math.min(Math.max(event.clientY - blockRect.top, 0), blockRect.height),
+      pointerOffsetY: Math.min(
+        Math.max(event.clientY - blockRect.top, 0),
+        blockRect.height,
+      ),
       blockHeight: blockRect.height,
       isDragging: false,
     }
@@ -2305,7 +2261,10 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
       const deltaY = pointerEvent.clientY - dragState.startY
       const distance = Math.hypot(deltaX, deltaY)
 
-      if (!dragState.isDragging && distance > MOBILE_ROUTINE_BLOCK_LONG_PRESS_CANCEL_DISTANCE_PX) {
+      if (
+        !dragState.isDragging &&
+        distance > MOBILE_ROUTINE_BLOCK_LONG_PRESS_CANCEL_DISTANCE_PX
+      ) {
         cancelMobileRoutineBlockDrag()
         return
       }
@@ -2313,22 +2272,33 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
       if (!dragState.isDragging) return
 
       pointerEvent.preventDefault()
-      scheduleMobileRoutineBlockDragPreview(pointerEvent.clientX, pointerEvent.clientY)
+      scheduleMobileRoutineBlockDragPreview(
+        pointerEvent.clientX,
+        pointerEvent.clientY,
+      )
     }
 
     const handlePointerEnd = (pointerEvent: PointerEvent) => {
-      if (mobileRoutineBlockDragRef.current?.pointerId !== pointerEvent.pointerId) return
+      if (
+        mobileRoutineBlockDragRef.current?.pointerId !== pointerEvent.pointerId
+      )
+        return
 
       finishMobileRoutineBlockDrag(pointerEvent)
     }
 
     const handlePointerCancel = (pointerEvent: PointerEvent) => {
-      if (mobileRoutineBlockDragRef.current?.pointerId !== pointerEvent.pointerId) return
+      if (
+        mobileRoutineBlockDragRef.current?.pointerId !== pointerEvent.pointerId
+      )
+        return
 
       cancelMobileRoutineBlockDrag()
     }
 
-    window.addEventListener("pointermove", handlePointerMove, { passive: false })
+    window.addEventListener("pointermove", handlePointerMove, {
+      passive: false,
+    })
     window.addEventListener("pointerup", handlePointerEnd)
     window.addEventListener("pointercancel", handlePointerCancel)
 
@@ -2359,8 +2329,10 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
             option.className,
           )}
         >
-          <span className="block text-base font-semibold text-foreground">{option.label}</span>
-          <span className="mt-2 block text-sm text-muted-foreground">
+          <span className="text-foreground block text-base font-semibold">
+            {option.label}
+          </span>
+          <span className="text-muted-foreground mt-2 block text-sm">
             {option.defaultDurationMinutes}min
           </span>
         </button>
@@ -2368,14 +2340,23 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
     </div>
   )
 
-  const handleBlockDragStart = (event: DragEvent<HTMLDivElement>, block: RoutineBlock, weekday: Weekday) => {
-    const payload: DragPayload = { kind: "block", sourceWeekday: weekday, blockId: block.id }
+  const handleBlockDragStart = (
+    event: DragEvent<HTMLDivElement>,
+    block: RoutineBlock,
+    weekday: Weekday,
+  ) => {
+    const payload: DragPayload = {
+      kind: "block",
+      sourceWeekday: weekday,
+      blockId: block.id,
+    }
     const blockRect = event.currentTarget.getBoundingClientRect()
     const pointerOffsetPixels = Math.min(
       Math.max(event.clientY - blockRect.top, 0),
       blockRect.height,
     )
-    const pointerOffsetRatio = blockRect.height > 0 ? pointerOffsetPixels / blockRect.height : 0
+    const pointerOffsetRatio =
+      blockRect.height > 0 ? pointerOffsetPixels / blockRect.height : 0
     dragStartOffsetMinutesRef.current = Math.round(
       pointerOffsetRatio * Math.max(0, block.durationMinutes - 1),
     )
@@ -2389,7 +2370,10 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
     setOpenMenuBlockId(null)
   }
 
-  const handleDayDragOver = (event: DragEvent<HTMLElement>, weekday: Weekday) => {
+  const handleDayDragOver = (
+    event: DragEvent<HTMLElement>,
+    weekday: Weekday,
+  ) => {
     event.preventDefault()
     updateDragAutoScroll(event)
     event.dataTransfer.dropEffect = draggingBlockId ? "move" : "copy"
@@ -2398,7 +2382,11 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
     updateDragPreview(event, weekday)
   }
 
-  const handleBlockDragOver = (event: DragEvent<HTMLDivElement>, weekday: Weekday, blockId: string) => {
+  const handleBlockDragOver = (
+    event: DragEvent<HTMLDivElement>,
+    weekday: Weekday,
+    blockId: string,
+  ) => {
     event.preventDefault()
     updateDragAutoScroll(event)
     event.stopPropagation()
@@ -2423,31 +2411,33 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
     const rawDropMinutes = getDragMinutesFromEvent(event, durationMinutes)
     const startMinutes =
       rawDropMinutes !== null
-        ? getSnapResult(rawDropMinutes, weekday, durationMinutes, payload).minutes
-        : dragPreview?.minutes ?? timelineRange.startMinutes
+        ? getSnapResult(rawDropMinutes, weekday, durationMinutes, payload)
+            .minutes
+        : (dragPreview?.minutes ?? timelineRange.startMinutes)
 
     if (payload.kind === "palette") {
-      insertBlockIntoDay(weekday, createBlockFromType(payload.blockType, weekday, startMinutes))
+      insertBlockIntoDay(
+        weekday,
+        createBlockFromType(payload.blockType, weekday, startMinutes),
+      )
     } else {
-      moveBlockToDay(payload.sourceWeekday, payload.blockId, weekday, startMinutes)
+      moveBlockToDay(
+        payload.sourceWeekday,
+        payload.blockId,
+        weekday,
+        startMinutes,
+      )
     }
 
     clearDragState()
   }
 
-  const saveCurrentWeek = () => {
-    if (!draftWeek) return
-    const nextRoutine = getRoutineWithCurrentDraftWeek()
-
-    setDraftRoutine(nextRoutine)
-    saveRoutine(nextRoutine)
-    setIsSaved(true)
-  }
-
   const saveCurrentMonthRoutine = () => {
     if (isSaved) return
 
-    const nextRoutine = syncRecurringSeriesFromCurrentWeek(getRoutineWithCurrentDraftWeek())
+    const nextRoutine = syncRecurringSeriesFromCurrentWeek(
+      getRoutineWithCurrentDraftWeek(),
+    )
 
     setDraftRoutine(nextRoutine)
     setDraftWeek(createRoutineWeekFromDate(selectedDateKey, nextRoutine))
@@ -2456,19 +2446,6 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
     setUndoStack([])
     setRedoStack([])
     showToast({ message: "Rotina salva com sucesso." })
-  }
-
-  const repeatCurrentWeekForMonth = () => {
-    if (!draftWeek) return
-    const withCurrentWeek = upsertRoutineWeek(routine, cloneRoutineWeek(draftWeek))
-    const nextRoutine = repeatWeekForMonth(
-      withCurrentWeek,
-      draftWeek,
-      selectedDate.getFullYear(),
-      selectedDate.getMonth(),
-    )
-    saveRoutine(nextRoutine)
-    setIsSaved(true)
   }
 
   const clearCurrentMonthRoutine = () => {
@@ -2485,18 +2462,21 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
       selectedDate.getMonth(),
     )
 
-    const nextRoutine = weekStartKeys.reduce((currentRoutine, weekStartDate) => {
-      return upsertRoutineWeek(currentRoutine, {
-        id: `week-${weekStartDate}`,
-        weekStartDate,
-        days: WEEK_DAYS.map((day) => ({
-          id: `${weekStartDate}-${day.key}`,
-          weekday: day.key,
-          blocks: [],
-          isActive: false,
-        })),
-      })
-    }, getRoutineWithCurrentDraftWeek())
+    const nextRoutine = weekStartKeys.reduce(
+      (currentRoutine, weekStartDate) => {
+        return upsertRoutineWeek(currentRoutine, {
+          id: `week-${weekStartDate}`,
+          weekStartDate,
+          days: WEEK_DAYS.map((day) => ({
+            id: `${weekStartDate}-${day.key}`,
+            weekday: day.key,
+            blocks: [],
+            isActive: false,
+          })),
+        })
+      },
+      getRoutineWithCurrentDraftWeek(),
+    )
 
     setDraftRoutine(nextRoutine)
     setDraftWeek(createRoutineWeekFromDate(selectedDateKey, nextRoutine))
@@ -2524,7 +2504,9 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
 
           <PageHeading title="Configurar rotina" align="center" />
         </div>
-        <div className="p-6 text-center text-base text-muted-foreground">Carregando rotina...</div>
+        <div className="text-muted-foreground p-6 text-center text-base">
+          Carregando rotina...
+        </div>
       </div>
     )
   }
@@ -2533,352 +2515,421 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
     <>
       <div className="hidden xl:block">
         <div className="flex flex-col gap-5 sm:gap-6">
-      <div className="relative flex w-full items-center justify-center">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-lg"
-          className="absolute left-0 rounded-full"
-          onClick={onBackToSettings}
-          aria-label="Voltar para configurações"
-        >
-          <ChevronLeft className="size-5" />
-        </Button>
+          <div className="relative flex w-full items-center justify-center">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-lg"
+              className="absolute left-0 rounded-full"
+              onClick={onBackToSettings}
+              aria-label="Voltar para configurações"
+            >
+              <ChevronLeft className="size-5" />
+            </Button>
 
-        <PageHeading title="Configurar rotina" align="center" />
-      </div>
-
-      <div className="grid gap-6">
-        <section className="min-w-0">
-          <div className="mb-5 flex flex-col items-center gap-3 sm:mb-6">
-            <div className="flex w-full max-w-xl items-center justify-center gap-3">
-              <Button
-                type="button"
-                variant="outline"
-                size="icon-lg"
-                className="shrink-0 rounded-full bg-background/80 shadow-sm"
-                onClick={() => moveWeek(-1)}
-                aria-label="Semana anterior"
-              >
-                <ChevronLeft className="size-4" />
-              </Button>
-
-              <h2 className="min-w-0 flex-1 text-center text-xl font-semibold text-foreground sm:text-2xl">
-                {selectedMonthLabel}
-              </h2>
-
-              <Button
-                type="button"
-                variant="outline"
-                size="icon-lg"
-                className="shrink-0 rounded-full bg-background/80 shadow-sm"
-                onClick={() => moveWeek(1)}
-                aria-label="Próxima semana"
-              >
-                <ChevronRight className="size-4" />
-              </Button>
-            </div>
+            <PageHeading title="Configurar rotina" align="center" />
           </div>
 
-          <div
-            ref={workspaceScrollRef}
-            className="max-h-[calc(100svh-15rem)] overflow-auto overscroll-contain rounded-[1.75rem] border border-border/50 bg-muted/10 p-3 shadow-sm sm:p-4"
-          >
-            <div
-              className="routine-builder-scheduler-grid grid min-w-[1240px] items-stretch gap-x-2 gap-y-3 2xl:min-w-0 2xl:gap-x-3"
-              style={{
-                ["--routine-builder-timeline-height" as string]: `${timelineHeight}px`,
-                gridTemplateColumns: "76px repeat(7, minmax(152px, 1fr))",
-                gridTemplateRows: `${TIMELINE_HEADER_HEIGHT}px ${timelineHeight}px`,
-              }}
-            >
-              <div className="sticky top-0 z-30 min-h-16" aria-hidden="true" />
-
-              {weekDays.map((day) => (
-                <div
-                  key={`${day.dateKey}-header`}
-                  ref={day.key === selectedWeekday ? selectedDayColumnRef : undefined}
-                  className={cn(
-                    "routine-builder-day-header sticky top-0 z-30 flex min-h-16 flex-col items-center justify-center gap-1 rounded-[1.25rem] border border-border/60 bg-background/95 px-3 py-2 shadow-sm backdrop-blur",
-                    day.isToday && "routine-builder-day-header-today border-cyan-400/80 bg-cyan-400/10 shadow-cyan-400/10",
-                  )}
-                >
-                  <span className="text-sm font-medium leading-5 text-muted-foreground">{day.label}</span>
-                  <span className="font-mono text-xl font-semibold leading-none text-foreground tabular-nums">
-                    {day.dayNumber}
-                  </span>
-                </div>
-              ))}
-
-              <div className="routine-builder-time-column relative rounded-[1.5rem] border border-border/40 bg-background/70 shadow-sm" style={{ height: timelineHeight }}>
-                {timeSlots.map((slot) => (
-                  <span
-                    key={`time-${slot}`}
-                    className="routine-builder-time-label absolute left-0 right-0 -translate-y-1/2 whitespace-nowrap text-center text-sm leading-5 text-muted-foreground"
-                    style={{ top: minutesToTimelineTop(slot, timelineRange.startMinutes) + HOUR_ROW_HEIGHT / 2 }}
+          <div className="grid gap-6">
+            <section className="min-w-0">
+              <div className="mb-5 flex flex-col items-center gap-3 sm:mb-6">
+                <div className="flex w-full max-w-xl items-center justify-center gap-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon-lg"
+                    className="bg-background/80 shrink-0 rounded-full shadow-sm"
+                    onClick={() => moveWeek(-1)}
+                    aria-label="Semana anterior"
                   >
-                    {formatTimeLabel(slot)}
-                  </span>
-                ))}
+                    <ChevronLeft className="size-4" />
+                  </Button>
+
+                  <h2 className="text-foreground min-w-0 flex-1 text-center text-xl font-semibold sm:text-2xl">
+                    {selectedMonthLabel}
+                  </h2>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon-lg"
+                    className="bg-background/80 shrink-0 rounded-full shadow-sm"
+                    onClick={() => moveWeek(1)}
+                    aria-label="Próxima semana"
+                  >
+                    <ChevronRight className="size-4" />
+                  </Button>
+                </div>
               </div>
 
-              {weekDays.map((day) => {
-                const layouts = dayBlockLayouts.get(day.key) ?? []
-                return (
+              <div
+                ref={workspaceScrollRef}
+                className="border-border/50 bg-muted/10 max-h-[calc(100svh-15rem)] overflow-auto overscroll-contain rounded-[1.75rem] border p-3 shadow-sm sm:p-4"
+              >
+                <div
+                  className="routine-builder-scheduler-grid grid min-w-[1240px] items-stretch gap-x-2 gap-y-3 2xl:min-w-0 2xl:gap-x-3"
+                  style={{
+                    ["--routine-builder-timeline-height" as string]: `${timelineHeight}px`,
+                    gridTemplateColumns: "76px repeat(7, minmax(152px, 1fr))",
+                    gridTemplateRows: `${TIMELINE_HEADER_HEIGHT}px ${timelineHeight}px`,
+                  }}
+                >
                   <div
-                    key={`${day.dateKey}-lane`}
-                    className={cn(
-                      "routine-builder-day-lane group/day-lane relative rounded-[1.5rem] transition-colors",
-                      dragOverWeekday === day.key && "routine-builder-day-lane-active",
-                    )}
-                    data-routine-day-lane="true"
+                    className="sticky top-0 z-30 min-h-16"
+                    aria-hidden="true"
+                  />
+
+                  {weekDays.map((day) => (
+                    <div
+                      key={`${day.dateKey}-header`}
+                      ref={
+                        day.key === selectedWeekday
+                          ? selectedDayColumnRef
+                          : undefined
+                      }
+                      className={cn(
+                        "routine-builder-day-header border-border/60 bg-background/95 sticky top-0 z-30 flex min-h-16 flex-col items-center justify-center gap-1 rounded-[1.25rem] border px-3 py-2 shadow-sm backdrop-blur",
+                        day.isToday &&
+                          "routine-builder-day-header-today border-cyan-400/80 bg-cyan-400/10 shadow-cyan-400/10",
+                      )}
+                    >
+                      <span className="text-muted-foreground text-sm leading-5 font-medium">
+                        {day.label}
+                      </span>
+                      <span className="text-foreground font-mono text-xl leading-none font-semibold tabular-nums">
+                        {day.dayNumber}
+                      </span>
+                    </div>
+                  ))}
+
+                  <div
+                    className="routine-builder-time-column border-border/40 bg-background/70 relative rounded-[1.5rem] border shadow-sm"
                     style={{ height: timelineHeight }}
-                    onDragOver={(event) => handleDayDragOver(event, day.key)}
-                    onDrop={(event) => handleDrop(event, day.key)}
-                    onDragEnd={clearDragState}
                   >
                     {timeSlots.map((slot) => (
                       <span
-                        key={`${day.dateKey}-line-${slot}`}
-                        className="routine-builder-hour-line absolute left-0 right-0 border-t border-border/50"
-                        style={{ top: minutesToTimelineTop(slot, timelineRange.startMinutes) }}
-                        aria-hidden="true"
-                      />
+                        key={`time-${slot}`}
+                        className="routine-builder-time-label text-muted-foreground absolute right-0 left-0 -translate-y-1/2 text-center text-sm leading-5 whitespace-nowrap"
+                        style={{
+                          top:
+                            minutesToTimelineTop(
+                              slot,
+                              timelineRange.startMinutes,
+                            ) +
+                            HOUR_ROW_HEIGHT / 2,
+                        }}
+                      >
+                        {formatTimeLabel(slot)}
+                      </span>
                     ))}
-
-                    {layouts.map(({ block, top, height }, blockIndex) => {
-                      const option = getBuilderBlockOption(block.type)
-                      const menuOpen = openMenuBlockId === block.id
-                      const isCompactBlock = height < 64
-                      const hasConflict = conflictBlockIds.has(block.id)
-
-                      return (
-                        <div
-                          key={block.id}
-                          draggable
-                          onDragStart={(event) => handleBlockDragStart(event, block, day.key)}
-                          onDragOver={(event) => handleBlockDragOver(event, day.key, block.id)}
-                          onDrop={(event) => handleDrop(event, day.key)}
-                          onDragEnd={clearDragState}
-                          ref={menuOpen ? openMenuRef : undefined}
-                          className={cn(
-                            "routine-builder-schedule-block group absolute left-2 right-2 cursor-grab overflow-visible rounded-2xl border text-left shadow-sm transition active:cursor-grabbing",
-                            menuOpen ? "z-[900]" : "z-20",
-                            option.className,
-                            hasConflict && "border-red-400/80 bg-red-500/20 shadow-red-950/30 ring-1 ring-red-400/50",
-                            draggingBlockId === block.id && "opacity-50",
-                            dragOverBlockId === block.id && "ring-2 ring-primary/60",
-                            isCompactBlock ? "px-2 py-1.5" : "p-3",
-                          )}
-                          style={{ top, height }}
-                        >
-                          <div
-                            className={cn(
-                              "flex h-full min-w-0 justify-between gap-2",
-                              isCompactBlock ? "items-center" : "items-start",
-                            )}
-                          >
-                            <div
-                              className={cn(
-                                "min-w-0 flex-1",
-                                isCompactBlock ? "flex items-center gap-2" : "",
-                              )}
-                            >
-                              <span
-                                className={cn(
-                                  "wrap-break-word block font-semibold text-foreground",
-                                  isCompactBlock
-                                    ? "truncate text-sm leading-none"
-                                    : "whitespace-normal text-base leading-snug",
-                                  hasConflict && "text-red-50",
-                                )}
-                              >
-                                {block.title}
-                              </span>
-                              <span
-                                className={cn(
-                                  "text-sm text-muted-foreground",
-                                  hasConflict && "text-red-100/80",
-                                  isCompactBlock ? "shrink-0 leading-none" : "mt-1 block leading-5",
-                                )}
-                              >
-                                {block.durationMinutes}min
-                              </span>
-                            </div>
-
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon-sm"
-                              className={cn(
-                                "-mr-1 shrink-0 rounded-full opacity-75 hover:opacity-100",
-                                isCompactBlock ? "mt-0" : "-mt-1",
-                              )}
-                              onClick={() => setOpenMenuBlockId(menuOpen ? null : block.id)}
-                              aria-label="Abrir ações do bloco"
-                            >
-                              <MoreHorizontal className="size-4" />
-                            </Button>
-                          </div>
-
-                          {menuOpen ? (
-                            <div className="absolute left-full top-0 z-[9999] ml-3 grid min-w-44 gap-1 rounded-2xl border border-border p-2 text-foreground shadow-[0_28px_90px_rgba(0,0,0,1)] ring-1 ring-white/10" style={{ backgroundColor: "#050b12", isolation: "isolate" }}>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                className="min-h-9 justify-start"
-                                onClick={() => openEditDialog(block, day.key)}
-                              >
-                                <Pencil className="mr-2 size-4" />
-                                Editar
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                className="min-h-9 justify-start"
-                                onClick={() => duplicateBlock(block, day.key)}
-                              >
-                                <Copy className="mr-2 size-4" />
-                                Duplicar
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                className="min-h-9 justify-start"
-                                disabled={blockIndex === 0}
-                                onClick={() => moveBlock(block.id, -1, day.key)}
-                              >
-                                ↑ Subir
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                className="min-h-9 justify-start"
-                                disabled={blockIndex === layouts.length - 1}
-                                onClick={() => moveBlock(block.id, 1, day.key)}
-                              >
-                                ↓ Descer
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                className="min-h-9 justify-start text-destructive hover:text-destructive"
-                                onClick={() => requestDeleteBlock(block, day.key)}
-                              >
-                                <Trash2 className="mr-2 size-4" />
-                                Excluir
-                              </Button>
-                            </div>
-                          ) : null}
-                        </div>
-                      )
-                    })}
                   </div>
-                )
-              })}
-            </div>
-          </div>
 
-          <div className="mt-5 flex flex-col gap-3 sm:mt-6 sm:flex-row sm:items-center sm:justify-between">
-            <div className="min-h-6">
-              {conflictMessage ? (
-                <p className="flex items-center gap-2 text-sm font-medium text-red-300">
-                  <AlertTriangle className="size-4 shrink-0" />
-                  {conflictMessage}
-                </p>
-              ) : null}
-            </div>
+                  {weekDays.map((day) => {
+                    const layouts = dayBlockLayouts.get(day.key) ?? []
+                    return (
+                      <div
+                        key={`${day.dateKey}-lane`}
+                        className={cn(
+                          "routine-builder-day-lane group/day-lane relative rounded-[1.5rem] transition-colors",
+                          dragOverWeekday === day.key &&
+                            "routine-builder-day-lane-active",
+                        )}
+                        data-routine-day-lane="true"
+                        data-routine-weekday={day.key}
+                        style={{ height: timelineHeight }}
+                        onDragOver={(event) =>
+                          handleDayDragOver(event, day.key)
+                        }
+                        onDrop={(event) => handleDrop(event, day.key)}
+                        onDragEnd={clearDragState}
+                      >
+                        {timeSlots.map((slot) => (
+                          <span
+                            key={`${day.dateKey}-line-${slot}`}
+                            className="routine-builder-hour-line border-border/50 absolute right-0 left-0 border-t"
+                            style={{
+                              top: minutesToTimelineTop(
+                                slot,
+                                timelineRange.startMinutes,
+                              ),
+                            }}
+                            aria-hidden="true"
+                          />
+                        ))}
 
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
-              <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon-lg"
-                  className="size-11 rounded-xl"
-                  onClick={undoLastRoutineChange}
-                  disabled={undoStack.length === 0}
-                  aria-label="Desfazer última alteração"
-                  title="Desfazer"
-                >
-                  <Undo2 className="size-4" />
-                </Button>
+                        {layouts.map(({ block, top, height }, blockIndex) => {
+                          const option = getBuilderBlockOption(block.type)
+                          const menuOpen = openMenuBlockId === block.id
+                          const isCompactBlock = height < 64
+                          const hasConflict = conflictBlockIds.has(block.id)
 
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon-lg"
-                  className="size-11 rounded-xl"
-                  onClick={redoRoutineChange}
-                  disabled={redoStack.length === 0}
-                  aria-label="Refazer alteração"
-                  title="Refazer"
-                >
-                  <Redo2 className="size-4" />
-                </Button>
+                          return (
+                            <div
+                              key={block.id}
+                              draggable
+                              onDragStart={(event) =>
+                                handleBlockDragStart(event, block, day.key)
+                              }
+                              onDragOver={(event) =>
+                                handleBlockDragOver(event, day.key, block.id)
+                              }
+                              onDrop={(event) => handleDrop(event, day.key)}
+                              onDragEnd={clearDragState}
+                              ref={menuOpen ? openMenuRef : undefined}
+                              className={cn(
+                                "routine-builder-schedule-block group absolute right-2 left-2 cursor-grab overflow-visible rounded-2xl border text-left shadow-sm transition active:cursor-grabbing",
+                                menuOpen ? "z-[900]" : "z-20",
+                                option.className,
+                                hasConflict &&
+                                  "border-red-400/80 bg-red-500/20 ring-1 shadow-red-950/30 ring-red-400/50",
+                                draggingBlockId === block.id && "opacity-50",
+                                dragOverBlockId === block.id &&
+                                  "ring-primary/60 ring-2",
+                                isCompactBlock ? "px-2 py-1.5" : "p-3",
+                              )}
+                              style={{ top, height }}
+                              data-routine-block-id={block.id}
+                              data-routine-block-start-time={block.startTime}
+                            >
+                              <div
+                                className={cn(
+                                  "flex h-full min-w-0 justify-between gap-2",
+                                  isCompactBlock
+                                    ? "items-center"
+                                    : "items-start",
+                                )}
+                              >
+                                <div
+                                  className={cn(
+                                    "min-w-0 flex-1",
+                                    isCompactBlock
+                                      ? "flex items-center gap-2"
+                                      : "",
+                                  )}
+                                >
+                                  <span
+                                    className={cn(
+                                      "text-foreground block font-semibold wrap-break-word",
+                                      isCompactBlock
+                                        ? "truncate text-sm leading-none"
+                                        : "text-base leading-snug whitespace-normal",
+                                      hasConflict && "text-red-50",
+                                    )}
+                                  >
+                                    {block.title}
+                                  </span>
+                                  <span
+                                    className={cn(
+                                      "text-muted-foreground text-sm",
+                                      hasConflict && "text-red-100/80",
+                                      isCompactBlock
+                                        ? "shrink-0 leading-none"
+                                        : "mt-1 block leading-5",
+                                    )}
+                                  >
+                                    {block.durationMinutes}min
+                                  </span>
+                                </div>
+
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  className={cn(
+                                    "-mr-1 shrink-0 rounded-full opacity-75 hover:opacity-100",
+                                    isCompactBlock ? "mt-0" : "-mt-1",
+                                  )}
+                                  onClick={() =>
+                                    setOpenMenuBlockId(
+                                      menuOpen ? null : block.id,
+                                    )
+                                  }
+                                  aria-label="Abrir ações do bloco"
+                                >
+                                  <MoreHorizontal className="size-4" />
+                                </Button>
+                              </div>
+
+                              {menuOpen ? (
+                                <div
+                                  className="border-border text-foreground absolute top-0 left-full z-[9999] ml-3 grid min-w-44 gap-1 rounded-2xl border p-2 shadow-[0_28px_90px_rgba(0,0,0,1)] ring-1 ring-white/10"
+                                  style={{
+                                    backgroundColor: "#050b12",
+                                    isolation: "isolate",
+                                  }}
+                                >
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    className="min-h-9 justify-start"
+                                    onClick={() =>
+                                      openEditDialog(block, day.key)
+                                    }
+                                  >
+                                    <Pencil className="mr-2 size-4" />
+                                    Editar
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    className="min-h-9 justify-start"
+                                    onClick={() =>
+                                      duplicateBlock(block, day.key)
+                                    }
+                                  >
+                                    <Copy className="mr-2 size-4" />
+                                    Duplicar
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    className="min-h-9 justify-start"
+                                    disabled={blockIndex === 0}
+                                    onClick={() =>
+                                      moveBlock(block.id, -1, day.key)
+                                    }
+                                  >
+                                    ↑ Subir
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    className="min-h-9 justify-start"
+                                    disabled={blockIndex === layouts.length - 1}
+                                    onClick={() =>
+                                      moveBlock(block.id, 1, day.key)
+                                    }
+                                  >
+                                    ↓ Descer
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    className="text-destructive hover:text-destructive min-h-9 justify-start"
+                                    onClick={() =>
+                                      requestDeleteBlock(block, day.key)
+                                    }
+                                  >
+                                    <Trash2 className="mr-2 size-4" />
+                                    Excluir
+                                  </Button>
+                                </div>
+                              ) : null}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
 
-              <Button
-                type="button"
-                variant="outline"
-                className="min-h-11 w-full sm:w-auto"
-                onClick={clearCurrentMonthRoutine}
-              >
-                Limpar
-              </Button>
+              <div className="mt-5 flex flex-col gap-3 sm:mt-6 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-h-6">
+                  {conflictMessage ? (
+                    <p className="flex items-center gap-2 text-sm font-medium text-red-300">
+                      <AlertTriangle className="size-4 shrink-0" />
+                      {conflictMessage}
+                    </p>
+                  ) : null}
+                </div>
 
-              <Button
-                type="button"
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon-lg"
+                      className="size-11 rounded-xl"
+                      onClick={undoLastRoutineChange}
+                      disabled={undoStack.length === 0}
+                      aria-label="Desfazer última alteração"
+                      title="Desfazer"
+                    >
+                      <Undo2 className="size-4" />
+                    </Button>
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon-lg"
+                      className="size-11 rounded-xl"
+                      onClick={redoRoutineChange}
+                      disabled={redoStack.length === 0}
+                      aria-label="Refazer alteração"
+                      title="Refazer"
+                    >
+                      <Redo2 className="size-4" />
+                    </Button>
+                  </div>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="min-h-11 w-full sm:w-auto"
+                    onClick={clearCurrentMonthRoutine}
+                  >
+                    Limpar
+                  </Button>
+
+                  <Button
+                    type="button"
+                    className={cn(
+                      "min-h-11 w-full sm:w-auto",
+                      isSaved &&
+                        "border-border bg-muted text-muted-foreground hover:bg-muted hover:text-muted-foreground cursor-not-allowed border opacity-70",
+                    )}
+                    onClick={saveCurrentMonthRoutine}
+                    disabled={isSaved}
+                  >
+                    <Save className="mr-2 size-4" />
+                    {isSaved ? "Salvo" : "Salvar"}
+                  </Button>
+                </div>
+              </div>
+            </section>
+
+            <aside
+              className={cn(
+                "routine-builder-block-panel fixed top-24 right-0 z-40 h-[calc(100vh-7rem)] w-[320px] transition-transform duration-300",
+                "xl:block",
+                isBlockPanelOpen
+                  ? "translate-x-0"
+                  : "translate-x-[calc(100%-12px)]",
+              )}
+              aria-label="Painel de blocos"
+              onMouseEnter={() => setIsBlockPanelOpen(true)}
+              onMouseLeave={() => setIsBlockPanelOpen(false)}
+            >
+              <div
                 className={cn(
-                  "min-h-11 w-full sm:w-auto",
-                  isSaved &&
-                    "cursor-not-allowed border border-border bg-muted text-muted-foreground opacity-70 hover:bg-muted hover:text-muted-foreground",
+                  "pointer-events-none absolute top-1/2 left-0 -translate-x-[calc(100%+0.5rem)] -translate-y-1/2 transition-all duration-300 ease-out",
+                  isBlockPanelOpen
+                    ? "scale-90 opacity-0"
+                    : "scale-100 opacity-100",
                 )}
-                onClick={saveCurrentMonthRoutine}
-                disabled={isSaved}
+                aria-hidden="true"
               >
-                <Save className="mr-2 size-4" />
-                {isSaved ? "Salvo" : "Salvar"}
-              </Button>
-            </div>
-          </div>
-        </section>
+                <div className="routine-builder-panel-hint-motion flex h-12 w-12 items-center justify-center rounded-full border border-cyan-400/35 bg-cyan-400/10 shadow-[0_12px_32px_rgba(0,0,0,0.28)] ring-1 ring-cyan-300/10 backdrop-blur-xl">
+                  <ChevronRight className="size-5 text-cyan-200" />
+                </div>
+              </div>
 
-                        <aside
-          className={cn(
-            "routine-builder-block-panel fixed right-0 top-24 z-40 h-[calc(100vh-7rem)] w-[320px] transition-transform duration-300",
-            "xl:block",
-            isBlockPanelOpen ? "translate-x-0" : "translate-x-[calc(100%-12px)]",
-          )}
-          aria-label="Painel de blocos"
-          onMouseEnter={() => setIsBlockPanelOpen(true)}
-          onMouseLeave={() => setIsBlockPanelOpen(false)}
-        >
-          <div
-            className={cn(
-              "pointer-events-none absolute left-0 top-1/2 -translate-x-[calc(100%+0.5rem)] -translate-y-1/2 transition-all duration-300 ease-out",
-              isBlockPanelOpen ? "scale-90 opacity-0" : "scale-100 opacity-100",
-            )}
-            aria-hidden="true"
-          >
-            <div className="routine-builder-panel-hint-motion flex h-12 w-12 items-center justify-center rounded-full border border-cyan-400/35 bg-cyan-400/10 shadow-[0_12px_32px_rgba(0,0,0,0.28)] ring-1 ring-cyan-300/10 backdrop-blur-xl">
-              <ChevronRight className="size-5 text-cyan-200" />
-            </div>
-          </div>
+              <div className="border-border/70 bg-background/95 h-full rounded-l-2xl border border-r-0 p-4 shadow-2xl backdrop-blur">
+                <h2 className="text-foreground mb-4 text-xl font-semibold">
+                  Blocos
+                </h2>
 
-          <div className="h-full rounded-l-2xl border border-r-0 border-border/70 bg-background/95 p-4 shadow-2xl backdrop-blur">
-            <h2 className="mb-4 text-xl font-semibold text-foreground">Blocos</h2>
-
-            {renderBlockPalette()}
+                {renderBlockPalette()}
+              </div>
+            </aside>
           </div>
-        </aside>
         </div>
-      </div>
       </div>
 
       <div className="xl:hidden">
-        <section className="-mx-4 -my-6 flex h-[calc(100svh-3.5rem)] flex-col bg-background sm:-mx-6 sm:-my-8 sm:h-[calc(100svh-4rem)]">
-          <header className="z-30 border-b border-border/70 bg-background/95 px-3 py-3 backdrop-blur sm:px-5">
+        <section className="bg-background -mx-4 -my-6 flex h-[calc(100svh-3.5rem)] flex-col sm:-mx-6 sm:-my-8 sm:h-[calc(100svh-4rem)]">
+          <header className="border-border/70 bg-background/95 z-30 border-b px-3 py-3 backdrop-blur sm:px-5">
             <div className="flex min-w-0 items-center gap-1.5">
               <Button
                 type="button"
@@ -2891,7 +2942,7 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
                 <ChevronLeft className="size-5" />
               </Button>
 
-              <h1 className="min-w-0 flex-1 truncate px-1 text-sm font-semibold text-foreground sm:text-lg">
+              <h1 className="text-foreground min-w-0 flex-1 truncate px-1 text-sm font-semibold sm:text-lg">
                 {selectedMonthLabel}
               </h1>
 
@@ -2926,7 +2977,7 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
                   className={cn(
                     "h-8 rounded-full px-2.5 text-sm",
                     isSaved &&
-                      "cursor-not-allowed border border-border bg-muted text-muted-foreground opacity-70 hover:bg-muted hover:text-muted-foreground",
+                      "border-border bg-muted text-muted-foreground hover:bg-muted hover:text-muted-foreground cursor-not-allowed border opacity-70",
                   )}
                   onClick={saveCurrentMonthRoutine}
                   disabled={isSaved}
@@ -2940,6 +2991,7 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
 
           <div
             ref={mobileSwipeContainerRef}
+            data-mobile-swipe-container="true"
             className="relative flex-1 overflow-hidden"
             onPointerDown={handleMobileSwipeStart}
             onPointerMove={handleMobileSwipeMove}
@@ -2963,27 +3015,33 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
                     className="flex h-full w-1/3 shrink-0 flex-col overflow-hidden"
                     aria-hidden={!isCurrentMobileDay}
                   >
-                    <div className="border-b border-border/60 bg-background px-4 py-5 sm:px-6">
+                    <div className="border-border/60 bg-background border-b px-4 py-5 sm:px-6">
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-muted-foreground">
-                          {dayView.dayInfo.isToday ? "Dia atual" : "Dia selecionado"}
+                        <p className="text-muted-foreground truncate text-sm font-medium">
+                          {dayView.dayInfo.isToday
+                            ? "Dia atual"
+                            : "Dia selecionado"}
                         </p>
-                        <p className="mt-1 truncate text-2xl font-semibold text-foreground sm:text-3xl">
+                        <p className="text-foreground mt-1 truncate text-2xl font-semibold sm:text-3xl">
                           {dayView.dayInfo.label}, {dayView.dayInfo.dayNumber}
                         </p>
                       </div>
 
                       {dayView.conflictMessage ? (
-                        <p className="mt-3 flex items-start gap-2 text-sm font-medium leading-5 text-red-300">
+                        <p className="mt-3 flex items-start gap-2 text-sm leading-5 font-medium text-red-300">
                           <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-                          <span className="min-w-0">{dayView.conflictMessage}</span>
+                          <span className="min-w-0">
+                            {dayView.conflictMessage}
+                          </span>
                         </p>
                       ) : null}
                     </div>
 
                     <div
-                      ref={isCurrentMobileDay ? mobileTimelineScrollRef : undefined}
-                      className="relative flex-1 touch-pan-y overflow-y-auto overscroll-contain px-3 pb-28 pt-2 sm:px-5"
+                      ref={
+                        isCurrentMobileDay ? mobileTimelineScrollRef : undefined
+                      }
+                      className="relative flex-1 touch-pan-y overflow-y-auto overscroll-contain px-3 pt-2 pb-28 sm:px-5"
                     >
                       <div
                         className="relative mx-auto w-full max-w-4xl"
@@ -2992,149 +3050,205 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
                         {timeSlots.map((slot) => (
                           <div
                             key={`mobile-time-${dayView.dateKey}-${slot}`}
-                            className="absolute left-0 right-0 flex items-center gap-2"
-                            style={{ top: minutesToTimelineTop(slot, timelineRange.startMinutes) }}
+                            className="absolute right-0 left-0 flex items-center gap-2"
+                            style={{
+                              top: minutesToTimelineTop(
+                                slot,
+                                timelineRange.startMinutes,
+                              ),
+                            }}
                             aria-hidden="true"
                           >
-                            <span className="whitespace-nowrap font-mono text-[0.7rem] leading-none text-muted-foreground tabular-nums sm:w-14 sm:text-xs">
+                            <span className="text-muted-foreground font-mono text-[0.7rem] leading-none whitespace-nowrap tabular-nums sm:w-14 sm:text-xs">
                               {formatTimeLabel(slot)}
                             </span>
-                            <span className="min-w-0 flex-1 border-t border-border/55" />
+                            <span className="border-border/55 min-w-0 flex-1 border-t" />
                           </div>
                         ))}
 
                         <div
-                          ref={isCurrentMobileDay ? mobileDayLaneRef : undefined}
-                          className="absolute bottom-0 left-[3.25rem] right-0 top-0 sm:left-[4.5rem]"
+                          ref={
+                            isCurrentMobileDay ? mobileDayLaneRef : undefined
+                          }
+                          className="absolute top-0 right-0 bottom-0 left-[3.25rem] sm:left-[4.5rem]"
                           data-mobile-routine-day-lane="true"
+                          data-mobile-current-day={
+                            isCurrentMobileDay ? "true" : "false"
+                          }
+                          data-routine-weekday={dayView.weekday}
                         >
-                          {dayView.layouts.map(({ block, top, height }, blockIndex) => {
-                            const option = getBuilderBlockOption(block.type)
-                            const menuOpen = isCurrentMobileDay && openMenuBlockId === block.id
-                            const hasConflict = dayView.conflictBlockIds.has(block.id)
-                            const isCompactBlock = height < 54
+                          {dayView.layouts.map(
+                            ({ block, top, height }, blockIndex) => {
+                              const option = getBuilderBlockOption(block.type)
+                              const menuOpen =
+                                isCurrentMobileDay &&
+                                openMenuBlockId === block.id
+                              const hasConflict = dayView.conflictBlockIds.has(
+                                block.id,
+                              )
+                              const isCompactBlock = height < 54
 
-                            return (
-                              <div
-                                key={block.id}
-                                ref={menuOpen ? openMenuRef : undefined}
-                                className={cn(
-                                  "absolute z-10 touch-none select-none overflow-visible rounded-2xl border text-left shadow-sm",
-                                  option.className,
-                                  hasConflict && "border-red-400/80 bg-red-500/25 shadow-red-950/30 ring-1 ring-red-400/50",
-                                  draggingBlockId === block.id && "opacity-30",
-                                  isCompactBlock ? "px-2 py-1.5" : "p-3",
-                                )}
-                                onPointerDown={(event) =>
-                                  isCurrentMobileDay
-                                    ? handleMobileRoutineBlockPointerDown(event, block, dayView.weekday)
-                                    : undefined
-                                }
-                                style={{
-                                  top,
-                                  height,
-                                  left: 8,
-                                  right: 0,
-                                }}
-                              >
-                                <div className="flex h-full min-w-0 items-start justify-between gap-2">
-                                  <div
-                                    className={cn(
-                                      "min-w-0 flex-1 text-left",
-                                      isCompactBlock && "flex items-center gap-2 overflow-hidden",
-                                    )}
-                                  >
-                                    <span
+                              return (
+                                <div
+                                  key={block.id}
+                                  ref={menuOpen ? openMenuRef : undefined}
+                                  className={cn(
+                                    "absolute z-10 touch-none overflow-visible rounded-2xl border text-left shadow-sm select-none",
+                                    option.className,
+                                    hasConflict &&
+                                      "border-red-400/80 bg-red-500/25 ring-1 shadow-red-950/30 ring-red-400/50",
+                                    draggingBlockId === block.id &&
+                                      "opacity-30",
+                                    isCompactBlock ? "px-2 py-1.5" : "p-3",
+                                  )}
+                                  onPointerDown={(event) =>
+                                    isCurrentMobileDay
+                                      ? handleMobileRoutineBlockPointerDown(
+                                          event,
+                                          block,
+                                          dayView.weekday,
+                                        )
+                                      : undefined
+                                  }
+                                  style={{
+                                    top,
+                                    height,
+                                    left: 8,
+                                    right: 0,
+                                  }}
+                                  data-routine-block-id={block.id}
+                                  data-routine-block-start-time={
+                                    block.startTime
+                                  }
+                                >
+                                  <div className="flex h-full min-w-0 items-start justify-between gap-2">
+                                    <div
                                       className={cn(
-                                        "block truncate font-semibold text-foreground",
-                                        isCompactBlock
-                                          ? "min-w-0 flex-1 text-sm leading-none"
-                                          : "text-base leading-snug",
-                                        hasConflict && "text-red-50",
+                                        "min-w-0 flex-1 text-left",
+                                        isCompactBlock &&
+                                          "flex items-center gap-2 overflow-hidden",
                                       )}
                                     >
-                                      {block.title}
-                                    </span>
-                                    <span
-                                      className={cn(
-                                        "block truncate text-xs text-muted-foreground",
-                                        isCompactBlock ? "mt-0 shrink-0 leading-none" : "mt-0.5",
-                                        hasConflict && "text-red-100/80",
-                                      )}
+                                      <span
+                                        className={cn(
+                                          "text-foreground block truncate font-semibold",
+                                          isCompactBlock
+                                            ? "min-w-0 flex-1 text-sm leading-none"
+                                            : "text-base leading-snug",
+                                          hasConflict && "text-red-50",
+                                        )}
+                                      >
+                                        {block.title}
+                                      </span>
+                                      <span
+                                        className={cn(
+                                          "text-muted-foreground block truncate text-xs",
+                                          isCompactBlock
+                                            ? "mt-0 shrink-0 leading-none"
+                                            : "mt-0.5",
+                                          hasConflict && "text-red-100/80",
+                                        )}
+                                      >
+                                        {block.durationMinutes}min
+                                      </span>
+                                    </div>
+
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon-sm"
+                                      className="-mt-1 -mr-1 size-7 shrink-0 rounded-full"
+                                      onClick={() =>
+                                        isCurrentMobileDay
+                                          ? setOpenMenuBlockId(
+                                              menuOpen ? null : block.id,
+                                            )
+                                          : undefined
+                                      }
+                                      disabled={!isCurrentMobileDay}
+                                      aria-label="Abrir ações do bloco"
                                     >
-                                      {block.durationMinutes}min
-                                    </span>
+                                      <MoreHorizontal className="size-4" />
+                                    </Button>
                                   </div>
 
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon-sm"
-                                    className="-mr-1 -mt-1 size-7 shrink-0 rounded-full"
-                                    onClick={() =>
-                                      isCurrentMobileDay
-                                        ? setOpenMenuBlockId(menuOpen ? null : block.id)
-                                        : undefined
-                                    }
-                                    disabled={!isCurrentMobileDay}
-                                    aria-label="Abrir ações do bloco"
-                                  >
-                                    <MoreHorizontal className="size-4" />
-                                  </Button>
+                                  {menuOpen ? (
+                                    <div className="border-border bg-background text-foreground absolute top-9 right-0 z-50 grid min-w-44 gap-1 rounded-2xl border p-2 shadow-2xl ring-1 ring-white/10">
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        className="min-h-9 justify-start"
+                                        onClick={() =>
+                                          openEditDialog(block, dayView.weekday)
+                                        }
+                                      >
+                                        <Pencil className="mr-2 size-4" />
+                                        Editar
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        className="min-h-9 justify-start"
+                                        onClick={() =>
+                                          duplicateBlock(block, dayView.weekday)
+                                        }
+                                      >
+                                        <Copy className="mr-2 size-4" />
+                                        Duplicar
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        className="min-h-9 justify-start"
+                                        disabled={blockIndex === 0}
+                                        onClick={() =>
+                                          moveBlock(
+                                            block.id,
+                                            -1,
+                                            dayView.weekday,
+                                          )
+                                        }
+                                      >
+                                        ↑ Subir
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        className="min-h-9 justify-start"
+                                        disabled={
+                                          blockIndex ===
+                                          dayView.layouts.length - 1
+                                        }
+                                        onClick={() =>
+                                          moveBlock(
+                                            block.id,
+                                            1,
+                                            dayView.weekday,
+                                          )
+                                        }
+                                      >
+                                        ↓ Descer
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        className="text-destructive hover:text-destructive min-h-9 justify-start"
+                                        onClick={() =>
+                                          requestDeleteBlock(
+                                            block,
+                                            dayView.weekday,
+                                          )
+                                        }
+                                      >
+                                        <Trash2 className="mr-2 size-4" />
+                                        Excluir
+                                      </Button>
+                                    </div>
+                                  ) : null}
                                 </div>
-
-                                {menuOpen ? (
-                                  <div className="absolute right-0 top-9 z-50 grid min-w-44 gap-1 rounded-2xl border border-border bg-background p-2 text-foreground shadow-2xl ring-1 ring-white/10">
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      className="min-h-9 justify-start"
-                                      onClick={() => openEditDialog(block, dayView.weekday)}
-                                    >
-                                      <Pencil className="mr-2 size-4" />
-                                      Editar
-                                    </Button>
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      className="min-h-9 justify-start"
-                                      onClick={() => duplicateBlock(block, dayView.weekday)}
-                                    >
-                                      <Copy className="mr-2 size-4" />
-                                      Duplicar
-                                    </Button>
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      className="min-h-9 justify-start"
-                                      disabled={blockIndex === 0}
-                                      onClick={() => moveBlock(block.id, -1, dayView.weekday)}
-                                    >
-                                      ↑ Subir
-                                    </Button>
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      className="min-h-9 justify-start"
-                                      disabled={blockIndex === dayView.layouts.length - 1}
-                                      onClick={() => moveBlock(block.id, 1, dayView.weekday)}
-                                    >
-                                      ↓ Descer
-                                    </Button>
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      className="min-h-9 justify-start text-destructive hover:text-destructive"
-                                      onClick={() => requestDeleteBlock(block, dayView.weekday)}
-                                    >
-                                      <Trash2 className="mr-2 size-4" />
-                                      Excluir
-                                    </Button>
-                                  </div>
-                                ) : null}
-                              </div>
-                            )
-                          })}
+                              )
+                            },
+                          )}
                         </div>
                       </div>
                     </div>
@@ -3146,7 +3260,7 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
 
           <Button
             type="button"
-            className="fixed bottom-5 right-5 z-40 size-14 rounded-full bg-cyan-500 text-white shadow-[0_18px_45px_rgba(8,145,178,0.45)] hover:bg-cyan-400"
+            className="fixed right-5 bottom-5 z-40 size-14 rounded-full bg-cyan-500 text-white shadow-[0_18px_45px_rgba(8,145,178,0.45)] hover:bg-cyan-400"
             onClick={openMobileBlockPicker}
             aria-label="Adicionar bloco"
           >
@@ -3170,8 +3284,9 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
           />
           <div
             ref={mobileBlockPickerSheetRef}
+            data-mobile-block-picker-sheet="true"
             className={cn(
-              "relative max-h-[calc(100svh-3rem)] w-full touch-none select-none overflow-y-auto overscroll-contain rounded-t-3xl border border-border bg-background p-4 shadow-2xl transition-transform duration-300 ease-out will-change-transform",
+              "border-border bg-background relative max-h-[calc(100svh-3rem)] w-full touch-none overflow-y-auto overscroll-contain rounded-t-3xl border p-4 shadow-2xl transition-transform duration-300 ease-out will-change-transform select-none",
               isMobileBlockPickerVisible ? "translate-y-0" : "translate-y-full",
             )}
             role="dialog"
@@ -3183,8 +3298,14 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
             onPointerCancel={handleMobileBlockPickerPointerEnd}
             onClickCapture={handleMobileBlockPickerClickCapture}
           >
-            <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-muted" aria-hidden="true" />
-            <h2 id="mobile-block-picker-title" className="mb-4 text-lg font-semibold text-foreground">
+            <div
+              className="bg-muted mx-auto mb-4 h-1.5 w-12 rounded-full"
+              aria-hidden="true"
+            />
+            <h2
+              id="mobile-block-picker-title"
+              className="text-foreground mb-4 text-lg font-semibold"
+            >
               Adicionar bloco
             </h2>
 
@@ -3193,14 +3314,18 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
                 <button
                   key={option.type}
                   type="button"
-                  onPointerDown={(event) => handleMobilePaletteBlockPointerDown(event, option.type)}
+                  onPointerDown={(event) =>
+                    handleMobilePaletteBlockPointerDown(event, option.type)
+                  }
                   className={cn(
-                    "min-h-16 touch-none select-none rounded-2xl border px-4 py-3 text-left shadow-sm transition-colors hover:brightness-110",
+                    "min-h-16 touch-none rounded-2xl border px-4 py-3 text-left shadow-sm transition-colors select-none hover:brightness-110",
                     option.className,
                   )}
                 >
-                  <span className="block text-base font-semibold text-foreground">{option.label}</span>
-                  <span className="mt-1 block text-sm text-muted-foreground">
+                  <span className="text-foreground block text-base font-semibold">
+                    {option.label}
+                  </span>
+                  <span className="text-muted-foreground mt-1 block text-sm">
                     {option.defaultDurationMinutes}min
                   </span>
                 </button>
@@ -3213,21 +3338,26 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
       {mobilePaletteDragPreview ? (
         <div
           ref={mobilePalettePreviewRef}
+          data-mobile-palette-drag-preview="true"
           className={cn(
             "pointer-events-none fixed z-[10000] w-44 -translate-x-1/2 -translate-y-1/2 rounded-2xl border p-3 text-left shadow-2xl ring-1 ring-white/10 will-change-transform xl:hidden",
             getBuilderBlockOption(mobilePaletteDragPreview.blockType).className,
           )}
           style={{
             left: mobilePaletteDragPreview.x,
-            top: mobilePaletteDragPreview.y - MOBILE_PALETTE_PREVIEW_Y_OFFSET_PX,
+            top:
+              mobilePaletteDragPreview.y - MOBILE_PALETTE_PREVIEW_Y_OFFSET_PX,
             opacity: mobilePaletteDragPreview.isOverTimeline ? 1 : 0.75,
           }}
           aria-hidden="true"
         >
-          <span className="block truncate text-sm font-semibold text-foreground">
+          <span className="text-foreground block truncate text-sm font-semibold">
             {getBuilderBlockOption(mobilePaletteDragPreview.blockType).label}
           </span>
-          <span ref={mobilePalettePreviewTimeRef} className="mt-1 block text-xs text-muted-foreground">
+          <span
+            ref={mobilePalettePreviewTimeRef}
+            className="text-muted-foreground mt-1 block text-xs"
+          >
             {getMobilePalettePreviewLabel(
               mobilePaletteDragPreview.minutes,
               mobilePaletteDragPreview.snapped,
@@ -3241,7 +3371,8 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
           ref={mobileRoutineBlockPreviewRef}
           className={cn(
             "pointer-events-none fixed z-[10000] w-44 -translate-x-1/2 -translate-y-1/2 rounded-2xl border p-3 text-left shadow-2xl ring-1 ring-white/10 will-change-transform xl:hidden",
-            getBuilderBlockOption(mobileRoutineBlockDragPreview.block.type).className,
+            getBuilderBlockOption(mobileRoutineBlockDragPreview.block.type)
+              .className,
           )}
           style={{
             left: mobileRoutineBlockDragPreview.x,
@@ -3251,10 +3382,13 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
           }}
           aria-hidden="true"
         >
-          <span className="block truncate text-sm font-semibold text-foreground">
+          <span className="text-foreground block truncate text-sm font-semibold">
             {mobileRoutineBlockDragPreview.block.title}
           </span>
-          <span ref={mobileRoutineBlockPreviewTimeRef} className="mt-1 block text-xs text-muted-foreground">
+          <span
+            ref={mobileRoutineBlockPreviewTimeRef}
+            className="text-muted-foreground mt-1 block text-xs"
+          >
             {getMobileRoutineBlockPreviewLabel(
               mobileRoutineBlockDragPreview.minutes,
               mobileRoutineBlockDragPreview.snapped,
@@ -3264,7 +3398,7 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
       ) : null}
 
       {toast ? (
-        <div className="fixed bottom-5 right-5 z-[10000] flex max-w-sm items-center rounded-2xl border border-border bg-background px-4 py-3 text-sm text-foreground shadow-2xl ring-1 ring-white/10">
+        <div className="border-border bg-background text-foreground fixed right-5 bottom-5 z-[10000] flex max-w-sm items-center rounded-2xl border px-4 py-3 text-sm shadow-2xl ring-1 ring-white/10">
           <span className="min-w-0 flex-1">{toast.message}</span>
         </div>
       ) : null}
@@ -3272,23 +3406,29 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
       {isClearConfirmationOpen ? (
         <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/35 p-0 backdrop-blur-sm xl:items-center xl:p-4">
           <div
-            className="w-full max-w-md overflow-hidden rounded-t-2xl rounded-b-none border border-border bg-background shadow-2xl xl:rounded-2xl"
+            className="border-border bg-background w-full max-w-md overflow-hidden rounded-t-2xl rounded-b-none border shadow-2xl xl:rounded-2xl"
             role="dialog"
             aria-modal="true"
             aria-labelledby="routine-clear-modal-title"
           >
-            <div className="border-b border-border px-5 py-4">
-              <h2 id="routine-clear-modal-title" className="text-xl font-semibold text-foreground">
+            <div className="border-border border-b px-5 py-4">
+              <h2
+                id="routine-clear-modal-title"
+                className="text-foreground text-xl font-semibold"
+              >
                 Limpar rotina?
               </h2>
             </div>
 
-            <div className="grid gap-3 px-5 py-4 text-sm text-muted-foreground">
+            <div className="text-muted-foreground grid gap-3 px-5 py-4 text-sm">
               <p>Todos os blocos do mês visível serão removidos do rascunho.</p>
-              <p>Você poderá usar a seta de desfazer enquanto não salvar ou sair da página.</p>
+              <p>
+                Você poderá usar a seta de desfazer enquanto não salvar ou sair
+                da página.
+              </p>
             </div>
 
-            <div className="flex flex-col-reverse gap-3 border-t border-border bg-muted/20 px-5 py-4 xl:flex-row xl:justify-end">
+            <div className="border-border bg-muted/20 flex flex-col-reverse gap-3 border-t px-5 py-4 xl:flex-row xl:justify-end">
               <Button
                 type="button"
                 variant="outline"
@@ -3313,18 +3453,23 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
       {deleteConfirmation ? (
         <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/35 p-0 backdrop-blur-sm xl:items-center xl:p-4">
           <div
-            className="w-full max-w-md overflow-hidden rounded-t-2xl rounded-b-none border border-border bg-background shadow-2xl xl:rounded-2xl"
+            className="border-border bg-background w-full max-w-md overflow-hidden rounded-t-2xl rounded-b-none border shadow-2xl xl:rounded-2xl"
             role="dialog"
             aria-modal="true"
             aria-labelledby="routine-delete-modal-title"
           >
-            <div className="border-b border-border px-5 py-4">
-              <h2 id="routine-delete-modal-title" className="text-xl font-semibold text-foreground">
-                {deleteConfirmation.repeatSourceId ? "Excluir tarefa recorrente" : "Excluir bloco?"}
+            <div className="border-border border-b px-5 py-4">
+              <h2
+                id="routine-delete-modal-title"
+                className="text-foreground text-xl font-semibold"
+              >
+                {deleteConfirmation.repeatSourceId
+                  ? "Excluir tarefa recorrente"
+                  : "Excluir bloco?"}
               </h2>
             </div>
 
-            <div className="grid gap-3 px-5 py-4 text-sm text-muted-foreground">
+            <div className="text-muted-foreground grid gap-3 px-5 py-4 text-sm">
               {deleteConfirmation.repeatSourceId ? (
                 <>
                   <p>Essa tarefa faz parte de uma repetição.</p>
@@ -3332,19 +3477,27 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
               ) : (
                 <>
                   <p>Essa ação removerá este bloco da rotina.</p>
-                  <p>Você poderá usar a seta de desfazer enquanto não salvar ou sair da página.</p>
+                  <p>
+                    Você poderá usar a seta de desfazer enquanto não salvar ou
+                    sair da página.
+                  </p>
                 </>
               )}
             </div>
 
-            <div className="grid gap-3 border-t border-border bg-muted/20 px-5 py-4">
+            <div className="border-border bg-muted/20 grid gap-3 border-t px-5 py-4">
               {deleteConfirmation.repeatSourceId ? (
                 <>
                   <Button
                     type="button"
                     variant="outline"
                     className="min-h-11 w-full"
-                    onClick={() => deleteSingleBlock(deleteConfirmation.blockId, deleteConfirmation.weekday)}
+                    onClick={() =>
+                      deleteSingleBlock(
+                        deleteConfirmation.blockId,
+                        deleteConfirmation.weekday,
+                      )
+                    }
                   >
                     Apenas esta tarefa
                   </Button>
@@ -3352,7 +3505,9 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
                     type="button"
                     variant="destructive"
                     className="min-h-11 w-full"
-                    onClick={() => deleteRecurringSeries(deleteConfirmation.repeatSourceId!)}
+                    onClick={() =>
+                      deleteRecurringSeries(deleteConfirmation.repeatSourceId!)
+                    }
                   >
                     Todas as repetições
                   </Button>
@@ -3362,7 +3517,12 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
                   type="button"
                   variant="destructive"
                   className="min-h-11 w-full"
-                  onClick={() => deleteSingleBlock(deleteConfirmation.blockId, deleteConfirmation.weekday)}
+                  onClick={() =>
+                    deleteSingleBlock(
+                      deleteConfirmation.blockId,
+                      deleteConfirmation.weekday,
+                    )
+                  }
                 >
                   Excluir bloco
                 </Button>
@@ -3382,7 +3542,7 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
 
       {dragPreview ? (
         <div
-          className="pointer-events-none fixed z-[10000] rounded-full border border-border bg-background px-3 py-1 text-sm font-medium text-foreground shadow-2xl ring-1 ring-white/10"
+          className="border-border bg-background text-foreground pointer-events-none fixed z-[10000] rounded-full border px-3 py-1 text-sm font-medium shadow-2xl ring-1 ring-white/10"
           style={{
             left: dragPreview.x + 14,
             top: dragPreview.y + 14,
@@ -3390,27 +3550,35 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
           aria-hidden="true"
         >
           {formatTimeLabel(dragPreview.minutes)}
-          {dragPreview.snapped ? <span className="ml-1 text-muted-foreground">· encaixado</span> : null}
+          {dragPreview.snapped ? (
+            <span className="text-muted-foreground ml-1">· encaixado</span>
+          ) : null}
         </div>
       ) : null}
 
       {editing ? (
         <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/35 p-0 backdrop-blur-sm xl:items-center xl:p-4">
           <div
-            className="flex max-h-[92svh] w-full max-w-none flex-col overflow-hidden rounded-t-3xl rounded-b-none border border-border bg-background shadow-2xl xl:max-h-[calc(100svh-4rem)] xl:max-w-2xl xl:rounded-2xl"
+            ref={editingDialogRef}
+            className="border-border bg-background flex max-h-[92svh] w-full max-w-none flex-col overflow-hidden rounded-t-3xl rounded-b-none border shadow-2xl xl:max-h-[calc(100svh-4rem)] xl:max-w-2xl xl:rounded-2xl"
             role="dialog"
+            tabIndex={-1}
+            onKeyDown={handleEditingDialogKeyDown}
             aria-modal="true"
             aria-labelledby="routine-block-modal-title"
           >
-            <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-4 sm:px-6 sm:py-5">
-              <h2 id="routine-block-modal-title" className="text-xl font-semibold text-foreground">
+            <div className="border-border flex items-center justify-between gap-3 border-b px-4 py-4 sm:px-6 sm:py-5">
+              <h2
+                id="routine-block-modal-title"
+                className="text-foreground text-xl font-semibold"
+              >
                 {editing.mode === "edit" ? "Editar bloco" : "Adicionar bloco"}
               </h2>
 
               <button
                 type="button"
                 onClick={closeEditing}
-                className="flex size-10 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                className="text-muted-foreground hover:bg-muted hover:text-foreground flex size-10 shrink-0 items-center justify-center rounded-full transition-colors"
                 aria-label="Fechar modal"
               >
                 <X className="size-5" />
@@ -3431,13 +3599,14 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
                         className={cn(
                           "min-h-20 rounded-xl border px-4 py-4 text-left text-base transition-colors hover:brightness-110 sm:px-5 xl:rounded-2xl",
                           option.className,
-                          editing.type === option.type && "ring-2 ring-primary/70",
+                          editing.type === option.type &&
+                            "ring-primary/70 ring-2",
                         )}
                       >
-                        <span className="block text-base font-medium text-foreground">
+                        <span className="text-foreground block text-base font-medium">
                           {option.label}
                         </span>
-                        <span className="block text-sm text-muted-foreground">
+                        <span className="text-muted-foreground block text-sm">
                           {option.defaultDurationMinutes}min
                         </span>
                       </button>
@@ -3450,11 +3619,14 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
                 <Label htmlFor="routine-block-title">Nome</Label>
                 <Input
                   id="routine-block-title"
+                  autoFocus
                   className="h-12 text-base sm:h-14"
                   value={editing.title}
                   onChange={(event) =>
                     setEditing((current) =>
-                      current ? { ...current, title: event.target.value } : current,
+                      current
+                        ? { ...current, title: event.target.value }
+                        : current,
                     )
                   }
                   placeholder="Ex.: Linux, React, leitura..."
@@ -3465,11 +3637,13 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
                 <Label htmlFor="routine-block-description">Descrição</Label>
                 <textarea
                   id="routine-block-description"
-                  className="min-h-28 w-full resize-none rounded-xl border border-input bg-background px-3 py-3 text-base text-foreground shadow-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 sm:px-4"
+                  className="border-input bg-background text-foreground placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 min-h-28 w-full resize-none rounded-xl border px-3 py-3 text-base shadow-sm transition-colors outline-none focus-visible:ring-[3px] sm:px-4"
                   value={editing.description}
                   onChange={(event) =>
                     setEditing((current) =>
-                      current ? { ...current, description: event.target.value } : current,
+                      current
+                        ? { ...current, description: event.target.value }
+                        : current,
                     )
                   }
                   placeholder="Ex.: estudar fundamentos, revisar anotações, resolver exercícios..."
@@ -3488,14 +3662,18 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
                       value={editing.startTime}
                       onChange={(event) =>
                         setEditing((current) =>
-                          current ? { ...current, startTime: event.target.value } : current,
+                          current
+                            ? { ...current, startTime: event.target.value }
+                            : current,
                         )
                       }
                     />
                   </div>
 
                   <div className="grid gap-3">
-                    <Label htmlFor="routine-block-duration">Duração em minutos</Label>
+                    <Label htmlFor="routine-block-duration">
+                      Duração em minutos
+                    </Label>
                     <Input
                       id="routine-block-duration"
                       className="h-12 text-base sm:h-14"
@@ -3519,7 +3697,9 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
                 <>
                   <div className="grid gap-3 sm:grid-cols-2 xl:hidden">
                     <div className="grid gap-3">
-                      <Label htmlFor="routine-block-start-time-edit">Horário</Label>
+                      <Label htmlFor="routine-block-start-time-edit">
+                        Horário
+                      </Label>
                       <Input
                         id="routine-block-start-time-edit"
                         className="h-12 text-base sm:h-14"
@@ -3528,14 +3708,18 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
                         value={editing.startTime}
                         onChange={(event) =>
                           setEditing((current) =>
-                            current ? { ...current, startTime: event.target.value } : current,
+                            current
+                              ? { ...current, startTime: event.target.value }
+                              : current,
                           )
                         }
                       />
                     </div>
 
                     <div className="grid gap-3">
-                      <Label htmlFor="routine-block-duration-edit-mobile">Duração em minutos</Label>
+                      <Label htmlFor="routine-block-duration-edit-mobile">
+                        Duração em minutos
+                      </Label>
                       <Input
                         id="routine-block-duration-edit-mobile"
                         className="h-12 text-base sm:h-14"
@@ -3557,7 +3741,9 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
                   </div>
 
                   <div className="hidden gap-3 xl:grid">
-                    <Label htmlFor="routine-block-duration-edit-desktop">Duração em minutos</Label>
+                    <Label htmlFor="routine-block-duration-edit-desktop">
+                      Duração em minutos
+                    </Label>
                     <Input
                       id="routine-block-duration-edit-desktop"
                       className="h-12 text-base sm:h-14"
@@ -3581,37 +3767,45 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
 
               {editing.mode === "create" ? (
                 <div className="grid gap-3 xl:hidden">
-                  <Label htmlFor="routine-block-repeat-create">Repetir tarefa</Label>
+                  <Label htmlFor="routine-block-repeat-create">
+                    Repetir tarefa
+                  </Label>
 
                   <div className="relative">
                     <select
                       id="routine-block-repeat-create"
-                      className="h-12 w-full appearance-none rounded-xl border border-input bg-background pl-3 pr-12 text-base text-foreground shadow-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 sm:h-14 sm:pl-4 sm:pr-14"
+                      className="border-input bg-background text-foreground focus-visible:border-ring focus-visible:ring-ring/50 h-12 w-full appearance-none rounded-xl border pr-12 pl-3 text-base shadow-sm transition-colors outline-none focus-visible:ring-[3px] sm:h-14 sm:pr-14 sm:pl-4"
                       value={editing.repeatMode}
                       onChange={(event) =>
                         setEditing((current) =>
                           current
                             ? {
                                 ...current,
-                                repeatMode: event.target.value as EditingRepeatMode,
+                                repeatMode: event.target
+                                  .value as EditingRepeatMode,
                               }
                             : current,
                         )
                       }
                     >
                       <option value="none">Não repetir</option>
-                      <option value="week-daily">Todos os dias desta semana</option>
-                      <option value="month-daily">Todos os dias deste mês</option>
+                      <option value="week-daily">
+                        Todos os dias desta semana
+                      </option>
+                      <option value="month-daily">
+                        Todos os dias deste mês
+                      </option>
                       <option value="month-weekday">
                         {getWeekdayRepeatPrefix(editing.weekday)} deste mês
                       </option>
                       <option value="year-weekday">
-                        {getWeekdayRepeatPrefix(editing.weekday)} até o fim do ano
+                        {getWeekdayRepeatPrefix(editing.weekday)} até o fim do
+                        ano
                       </option>
                     </select>
 
                     <ChevronDown
-                      className="pointer-events-none absolute right-4 top-1/2 size-5 -translate-y-1/2 text-muted-foreground"
+                      className="text-muted-foreground pointer-events-none absolute top-1/2 right-4 size-5 -translate-y-1/2"
                       aria-hidden="true"
                     />
                   </div>
@@ -3625,32 +3819,38 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
                   <div className="relative">
                     <select
                       id="routine-block-repeat"
-                      className="h-12 w-full appearance-none rounded-xl border border-input bg-background pl-3 pr-12 text-base text-foreground shadow-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 sm:h-14 sm:pl-4 sm:pr-14"
+                      className="border-input bg-background text-foreground focus-visible:border-ring focus-visible:ring-ring/50 h-12 w-full appearance-none rounded-xl border pr-12 pl-3 text-base shadow-sm transition-colors outline-none focus-visible:ring-[3px] sm:h-14 sm:pr-14 sm:pl-4"
                       value={editing.repeatMode}
                       onChange={(event) =>
                         setEditing((current) =>
                           current
                             ? {
                                 ...current,
-                                repeatMode: event.target.value as EditingRepeatMode,
+                                repeatMode: event.target
+                                  .value as EditingRepeatMode,
                               }
                             : current,
                         )
                       }
                     >
                       <option value="none">Não repetir</option>
-                      <option value="week-daily">Todos os dias desta semana</option>
-                      <option value="month-daily">Todos os dias deste mês</option>
+                      <option value="week-daily">
+                        Todos os dias desta semana
+                      </option>
+                      <option value="month-daily">
+                        Todos os dias deste mês
+                      </option>
                       <option value="month-weekday">
                         {getWeekdayRepeatPrefix(editing.weekday)} deste mês
                       </option>
                       <option value="year-weekday">
-                        {getWeekdayRepeatPrefix(editing.weekday)} até o fim do ano
+                        {getWeekdayRepeatPrefix(editing.weekday)} até o fim do
+                        ano
                       </option>
                     </select>
 
                     <ChevronDown
-                      className="pointer-events-none absolute right-4 top-1/2 size-5 -translate-y-1/2 text-muted-foreground"
+                      className="text-muted-foreground pointer-events-none absolute top-1/2 right-4 size-5 -translate-y-1/2"
                       aria-hidden="true"
                     />
                   </div>
@@ -3658,7 +3858,7 @@ export function RoutineBuilderView({ onBackToSettings }: RoutineBuilderViewProps
               ) : null}
             </div>
 
-            <div className="flex flex-col-reverse gap-3 border-t border-border bg-muted/20 px-4 py-4 sm:flex-row sm:justify-end sm:px-6">
+            <div className="border-border bg-muted/20 flex flex-col-reverse gap-3 border-t px-4 py-4 sm:flex-row sm:justify-end sm:px-6">
               <Button
                 type="button"
                 variant="outline"

@@ -22,7 +22,10 @@ function isCapabilitiesQuestion(message: string): boolean {
   )
 }
 
-export function createMockMentorReply(message: string, context: MentorContext): string {
+export function createMockMentorReply(
+  message: string,
+  context: MentorContext,
+): string {
   if (isCapabilitiesQuestion(message)) {
     return [
       "Estou em modo local no momento, mas ainda consigo ajudar usando as informações salvas no RoutineOS.",
@@ -33,8 +36,10 @@ export function createMockMentorReply(message: string, context: MentorContext): 
   }
 
   const blockCount = context.todayRoutine.blocks.length
-  const studiedHours = Math.round((context.monthSummary.studiedMinutes / 60) * 10) / 10
-  const remainingHours = Math.round((context.monthSummary.remainingMinutes / 60) * 10) / 10
+  const studiedHours =
+    Math.round((context.monthSummary.studiedMinutes / 60) * 10) / 10
+  const remainingHours =
+    Math.round((context.monthSummary.remainingMinutes / 60) * 10) / 10
   const nextBlock = context.todayRoutine.blocks[0]
 
   const routineLine =

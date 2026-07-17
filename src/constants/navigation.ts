@@ -1,4 +1,10 @@
-import { BookOpen, Calendar, GraduationCap, Settings } from "lucide-react"
+import {
+  BookOpen,
+  Calendar,
+  GraduationCap,
+  ListChecks,
+  Settings,
+} from "lucide-react"
 import type { NavigationItem } from "@/types/navigation"
 
 export const NAV_ITEMS: NavigationItem[] = [
@@ -7,6 +13,12 @@ export const NAV_ITEMS: NavigationItem[] = [
     label: "Rotina",
     description: "Seus blocos de estudo do dia",
     icon: GraduationCap,
+  },
+  {
+    key: "configurar-rotina",
+    label: "Montar rotina",
+    description: "Configure seus blocos e horários",
+    icon: ListChecks,
   },
   {
     key: "calendario",

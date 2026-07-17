@@ -119,7 +119,8 @@ export function useStudySession({
       if (!autoAdvance || !hasNextRoutineBlock(record, routineBlocks)) return
 
       updateRecord((prev) => {
-        if (!prev.awaitingNextBlock || prev.status !== "in-progress") return prev
+        if (!prev.awaitingNextBlock || prev.status !== "in-progress")
+          return prev
         return advanceToNextRoutineBlock(prev, routineBlocks, Date.now())
       })
       return
@@ -129,14 +130,19 @@ export function useStudySession({
     const durationSeconds = getRoutineBlockDurationSeconds(block)
     if (!block || durationSeconds <= 0) return
 
-    const elapsedSeconds = computeLiveRoutineBlockElapsedSeconds(record, block, nowMs)
+    const elapsedSeconds = computeLiveRoutineBlockElapsedSeconds(
+      record,
+      block,
+      nowMs,
+    )
     if (elapsedSeconds < durationSeconds) return
 
     updateRecord((prev) => {
       if (prev.status !== "in-progress" || prev.awaitingNextBlock) return prev
 
       const currentBlock = getCurrentRoutineBlock(prev, routineBlocks)
-      const currentDurationSeconds = getRoutineBlockDurationSeconds(currentBlock)
+      const currentDurationSeconds =
+        getRoutineBlockDurationSeconds(currentBlock)
       if (!currentBlock || currentDurationSeconds <= 0) return prev
 
       const next = completeCurrentRoutineBlock(prev, routineBlocks, nowMs)
@@ -201,7 +207,11 @@ export function useStudySession({
         ...next,
         pauses: [
           ...next.pauses,
-          { startedAt: new Date(now).toISOString(), endedAt: null, durationSeconds: 0 },
+          {
+            startedAt: new Date(now).toISOString(),
+            endedAt: null,
+            durationSeconds: 0,
+          },
         ],
       }
       return next
@@ -222,7 +232,11 @@ export function useStudySession({
         routineBreakSegmentStartedAt: null,
         status: "in-progress",
       }
-      return startCurrentRoutineSegment(next, routineBlocks, new Date(now).toISOString())
+      return startCurrentRoutineSegment(
+        next,
+        routineBlocks,
+        new Date(now).toISOString(),
+      )
     })
   }, [hasRoutine, routineBlocks, updateRecord])
 
@@ -232,7 +246,10 @@ export function useStudySession({
       let next = finalizeOpenPause(prev, now)
       next = finalizeCurrentRoutineSegment(next, routineBlocks, now)
 
-      const bonusSeconds = getCountableBonusSeconds(next.activeSeconds, goalSeconds)
+      const bonusSeconds = getCountableBonusSeconds(
+        next.activeSeconds,
+        goalSeconds,
+      )
 
       return {
         ...next,
@@ -292,7 +309,11 @@ export function useStudySession({
         return { ...next, awaitingNextBlock: true }
       }
 
-      return startCurrentRoutineSegment({ ...next, awaitingNextBlock: false }, routineBlocks, resumedAt)
+      return startCurrentRoutineSegment(
+        { ...next, awaitingNextBlock: false },
+        routineBlocks,
+        resumedAt,
+      )
     })
   }, [hasRoutine, routineBlocks, updateRecord])
 
@@ -321,13 +342,20 @@ export function useStudySession({
     setRecord(empty)
   }, [dateKey])
 
-  const currentBlock = record ? getCurrentRoutineBlock(record, routineBlocks) : null
+  const currentBlock = record
+    ? getCurrentRoutineBlock(record, routineBlocks)
+    : null
   const currentBlockElapsedSeconds =
-    record && currentBlock ? computeLiveRoutineBlockElapsedSeconds(record, currentBlock, nowMs) : 0
+    record && currentBlock
+      ? computeLiveRoutineBlockElapsedSeconds(record, currentBlock, nowMs)
+      : 0
   const activeSeconds =
     record && currentBlock && record.activeSegmentStartedAt
       ? record.activeSeconds +
-        Math.max(0, currentBlockElapsedSeconds - record.routineBlockElapsedSeconds)
+        Math.max(
+          0,
+          currentBlockElapsedSeconds - record.routineBlockElapsedSeconds,
+        )
       : record
         ? computeLiveActiveSeconds(record, nowMs)
         : 0
@@ -335,25 +363,38 @@ export function useStudySession({
   const routineBreakSeconds =
     record && currentBlock && record.routineBreakSegmentStartedAt
       ? record.routineBreakSeconds +
-        Math.max(0, currentBlockElapsedSeconds - record.routineBlockElapsedSeconds)
+        Math.max(
+          0,
+          currentBlockElapsedSeconds - record.routineBlockElapsedSeconds,
+        )
       : record
         ? computeLiveRoutineBreakSeconds(record, nowMs)
         : 0
   const controlState = deriveControlState(record)
   const metaReached = activeSeconds >= goalSeconds
   const bonusSeconds = getCountableBonusSeconds(activeSeconds, goalSeconds)
-  const progress = Math.min(100, goalSeconds > 0 ? (activeSeconds / goalSeconds) * 100 : 0)
-  const currentBlockDurationSeconds = getRoutineBlockDurationSeconds(currentBlock)
+  const progress = Math.min(
+    100,
+    goalSeconds > 0 ? (activeSeconds / goalSeconds) * 100 : 0,
+  )
+  const currentBlockDurationSeconds =
+    getRoutineBlockDurationSeconds(currentBlock)
   const currentBlockProgress = Math.min(
     100,
     currentBlockDurationSeconds > 0
       ? (currentBlockElapsedSeconds / currentBlockDurationSeconds) * 100
       : 0,
   )
-  const hasNextBlock = record ? hasNextRoutineBlock(record, routineBlocks) : false
+  const hasNextBlock = record
+    ? hasNextRoutineBlock(record, routineBlocks)
+    : false
   const nextBlock =
-    record && hasNextBlock ? routineBlocks[record.routineBlockIndex + 1] ?? null : null
-  const isCurrentBlockRoutineBreak = currentBlock ? isRoutineBreakBlock(currentBlock.type) : false
+    record && hasNextBlock
+      ? (routineBlocks[record.routineBlockIndex + 1] ?? null)
+      : null
+  const isCurrentBlockRoutineBreak = currentBlock
+    ? isRoutineBreakBlock(currentBlock.type)
+    : false
 
   return {
     record,

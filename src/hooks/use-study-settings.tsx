@@ -1,6 +1,12 @@
 "use client"
 
-import { createContext, useCallback, useContext, useEffect, useState } from "react"
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+} from "react"
 import { DEFAULT_SETTINGS } from "@/constants/settings"
 import { STORAGE_EVENTS, STORAGE_KEYS } from "@/constants/storage"
 import { loadSettings, saveSettings } from "@/lib/storage"
@@ -13,9 +19,15 @@ interface StudySettingsContextValue {
   hydrated: boolean
 }
 
-const StudySettingsContext = createContext<StudySettingsContextValue | undefined>(undefined)
+const StudySettingsContext = createContext<
+  StudySettingsContextValue | undefined
+>(undefined)
 
-export function StudySettingsProvider({ children }: { children: React.ReactNode }) {
+export function StudySettingsProvider({
+  children,
+}: {
+  children: React.ReactNode
+}) {
   const [settings, setSettingsState] = useState<StudySettings>(DEFAULT_SETTINGS)
   const [hydrated, setHydrated] = useState(false)
 
@@ -39,7 +51,10 @@ export function StudySettingsProvider({ children }: { children: React.ReactNode 
 
     return () => {
       window.removeEventListener("storage", handleStorageChange)
-      window.removeEventListener(STORAGE_EVENTS.settingsChanged, refreshSettings)
+      window.removeEventListener(
+        STORAGE_EVENTS.settingsChanged,
+        refreshSettings,
+      )
       window.removeEventListener(STORAGE_EVENTS.appDataChanged, refreshSettings)
     }
   }, [refreshSettings])
@@ -58,7 +73,9 @@ export function StudySettingsProvider({ children }: { children: React.ReactNode 
   }, [])
 
   return (
-    <StudySettingsContext.Provider value={{ settings, updateSettings, setSettings, hydrated }}>
+    <StudySettingsContext.Provider
+      value={{ settings, updateSettings, setSettings, hydrated }}
+    >
       {children}
     </StudySettingsContext.Provider>
   )
@@ -67,7 +84,9 @@ export function StudySettingsProvider({ children }: { children: React.ReactNode 
 export function useStudySettings() {
   const ctx = useContext(StudySettingsContext)
   if (!ctx) {
-    throw new Error("useStudySettings deve ser usado dentro de StudySettingsProvider")
+    throw new Error(
+      "useStudySettings deve ser usado dentro de StudySettingsProvider",
+    )
   }
   return ctx
 }

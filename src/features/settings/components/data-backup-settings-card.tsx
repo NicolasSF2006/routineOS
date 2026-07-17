@@ -3,7 +3,13 @@
 import { useRef, useState } from "react"
 import { Database, Download, RefreshCcw, Trash2, Upload } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
 import {
   createRoutineOSBackup,
   importRoutineOSBackup,
@@ -11,13 +17,17 @@ import {
   restoreDefaultSettings,
 } from "@/lib/storage"
 
+const MAX_BACKUP_FILE_SIZE_BYTES = 25 * 1024 * 1024
+
 function createBackupFilename() {
   const date = new Date().toISOString().slice(0, 10)
   return `routineos-backup-${date}.json`
 }
 
 function downloadJson(filename: string, value: unknown) {
-  const blob = new Blob([JSON.stringify(value, null, 2)], { type: "application/json" })
+  const blob = new Blob([JSON.stringify(value, null, 2)], {
+    type: "application/json",
+  })
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement("a")
 
@@ -42,6 +52,12 @@ export function DataBackupSettingsCard() {
   const handleImportBackup = async (file: File | null) => {
     if (!file) return
 
+    if (file.size > MAX_BACKUP_FILE_SIZE_BYTES) {
+      setMessage("O arquivo de backup excede o limite de 25 MB.")
+      if (fileInputRef.current) fileInputRef.current.value = ""
+      return
+    }
+
     const confirmed = window.confirm(
       "Importar este backup vai substituir rotina, histórico, conversa e trilhas do Mentor IA, configurações, tema, tela atual e status do tutorial. Deseja continuar?",
     )
@@ -54,9 +70,13 @@ export function DataBackupSettingsCard() {
     try {
       const content = await file.text()
       importRoutineOSBackup(JSON.parse(content))
-      setMessage("Backup importado com sucesso. Recarregue a página se alguma tela não atualizar imediatamente.")
+      setMessage(
+        "Backup importado com sucesso. Recarregue a página se alguma tela não atualizar imediatamente.",
+      )
     } catch {
-      setMessage("Não foi possível importar este arquivo. Verifique se ele é um backup válido do RoutineOS.")
+      setMessage(
+        "Não foi possível importar este arquivo. Verifique se ele é um backup válido do RoutineOS.",
+      )
     } finally {
       if (fileInputRef.current) fileInputRef.current.value = ""
     }
@@ -88,20 +108,26 @@ export function DataBackupSettingsCard() {
     <Card>
       <CardHeader>
         <div className="flex items-center gap-2">
-          <span className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <span className="bg-primary/10 text-primary flex size-8 items-center justify-center rounded-lg">
             <Database className="size-4" />
           </span>
           <CardTitle className="text-xl">Dados e backup</CardTitle>
         </div>
-        <CardDescription>Exporte, importe ou limpe os dados locais do RoutineOS</CardDescription>
+        <CardDescription>
+          Exporte, importe ou limpe os dados locais do RoutineOS
+        </CardDescription>
       </CardHeader>
 
       <CardContent className="flex flex-col gap-4">
-        <div className="grid gap-3 rounded-xl border border-border bg-muted/30 p-4">
+        <div className="border-border bg-muted/30 grid gap-3 rounded-xl border p-4">
           <div className="flex flex-col gap-1">
-            <span className="text-base font-medium text-foreground">Backup completo</span>
-            <span className="wrap-break-word text-sm text-muted-foreground">
-              Inclui rotina, histórico, conversa e trilhas do Mentor IA, configurações, sons importados, tema, última tela acessada e status do tutorial.
+            <span className="text-foreground text-base font-medium">
+              Backup completo
+            </span>
+            <span className="text-muted-foreground text-sm wrap-break-word">
+              Inclui rotina, histórico, conversa e trilhas do Mentor IA,
+              configurações, sons importados, tema, última tela acessada e
+              status do tutorial.
             </span>
           </div>
 
@@ -109,7 +135,7 @@ export function DataBackupSettingsCard() {
             <Button
               type="button"
               variant="outline"
-              className="min-h-11 whitespace-normal text-center"
+              className="min-h-11 text-center whitespace-normal"
               onClick={handleExportBackup}
             >
               <Download className="mr-2 size-4" />
@@ -119,7 +145,7 @@ export function DataBackupSettingsCard() {
             <Button
               type="button"
               variant="outline"
-              className="min-h-11 whitespace-normal text-center"
+              className="min-h-11 text-center whitespace-normal"
               onClick={() => fileInputRef.current?.click()}
             >
               <Upload className="mr-2 size-4" />
@@ -132,15 +158,20 @@ export function DataBackupSettingsCard() {
             type="file"
             accept="application/json,.json"
             className="hidden"
-            onChange={(event) => void handleImportBackup(event.target.files?.[0] ?? null)}
+            onChange={(event) =>
+              void handleImportBackup(event.target.files?.[0] ?? null)
+            }
           />
         </div>
 
-        <div className="grid gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4">
+        <div className="border-destructive/30 bg-destructive/5 grid gap-3 rounded-xl border p-4">
           <div className="flex flex-col gap-1">
-            <span className="text-base font-medium text-foreground">Ações de segurança</span>
-            <span className="wrap-break-word text-sm text-muted-foreground">
-              Use com cuidado. Crie um backup antes de apagar ou restaurar dados importantes.
+            <span className="text-foreground text-base font-medium">
+              Ações de segurança
+            </span>
+            <span className="text-muted-foreground text-sm wrap-break-word">
+              Use com cuidado. Crie um backup antes de apagar ou restaurar dados
+              importantes.
             </span>
           </div>
 
@@ -148,7 +179,7 @@ export function DataBackupSettingsCard() {
             <Button
               type="button"
               variant="outline"
-              className="min-h-11 whitespace-normal text-center"
+              className="min-h-11 text-center whitespace-normal"
               onClick={handleRestoreDefaults}
             >
               <RefreshCcw className="mr-2 size-4" />
@@ -158,7 +189,7 @@ export function DataBackupSettingsCard() {
             <Button
               type="button"
               variant="destructive"
-              className="min-h-11 whitespace-normal text-center"
+              className="min-h-11 text-center whitespace-normal"
               onClick={handleResetAllData}
             >
               <Trash2 className="mr-2 size-4" />
@@ -167,7 +198,9 @@ export function DataBackupSettingsCard() {
           </div>
         </div>
 
-        {message ? <p className="text-center text-sm text-muted-foreground">{message}</p> : null}
+        {message ? (
+          <p className="text-muted-foreground text-center text-sm">{message}</p>
+        ) : null}
       </CardContent>
     </Card>
   )

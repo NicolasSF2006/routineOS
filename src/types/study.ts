@@ -21,7 +21,8 @@ export type Weekday =
   | "saturday"
   | "sunday"
 
-export type RoutineBlockType = "study" | "short-break" | "long-break" | "lunch" | "project" | "other"
+export type RoutineBlockType =
+  "study" | "short-break" | "long-break" | "lunch" | "project" | "other"
 
 export interface RoutineBlock {
   id: string
@@ -89,7 +90,8 @@ export interface StatusMeta {
   swatch: string
 }
 
-export type SoundEventKey = "shortBreak" | "longBreak" | "lunch" | "subjectChange"
+export type SoundEventKey =
+  "shortBreak" | "longBreak" | "lunch" | "subjectChange"
 
 export interface CustomSound {
   id: string

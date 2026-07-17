@@ -96,3 +96,18 @@
 - Configurações
 - Timer
 - Persistência local
+
+## Preparação técnica para publicação — 2026-07-15
+
+- alinhado runtime, tipos e CI em Node 22;
+- adicionado limite de payload durante streaming e validação profunda do contexto do Mentor;
+- endurecido rate limit com proxy explícito, limite rígido de buckets e cota separada para metadados;
+- adicionados thresholds de cobertura e testes de segurança, domínio, provedores e fluxos de navegador;
+- ampliadas as matrizes E2E, visual e axe, mantendo contraste documentado fora do gate;
+- divididos catálogo da trilha, apresentação de trilhas, validadores de storage, proposta do Mentor e auxiliares do construtor;
+- removidos placeholders sem referência e mantidas as chaves atuais de localStorage e backup.
+- corrigida a persistência de séries recorrentes, evitando que o salvamento reduzisse uma série semanal a uma única ocorrência;
+- estabilizados os testes reais de drag-and-drop, long press, bottom sheet e conclusão de sessão;
+- oficializados 51 baselines visuais Linux, 56 cenários E2E, 43 verificações de acessibilidade e 126 testes unitários/de integração;
+- isolado o teste de acessibilidade do bottom sheet no projeto mobile e sincronizada a data do SSR com o relógio fixo do Playwright para evitar avisos falsos de hidratação;
+- adicionado fechamento por Escape, contenção e devolução de foco no modal de edição de blocos.

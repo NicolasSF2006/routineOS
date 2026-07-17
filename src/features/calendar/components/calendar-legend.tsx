@@ -10,10 +10,16 @@ export function CalendarLegend() {
 
         return (
           <li key={key} className="flex items-start gap-2.5">
-            <span className={cn("mt-0.5 size-3.5 shrink-0 rounded-md", meta.swatch)} />
+            <span
+              className={cn("mt-0.5 size-3.5 shrink-0 rounded-md", meta.swatch)}
+            />
             <div className="flex flex-col">
-              <span className="text-base font-medium text-foreground">{meta.label}</span>
-              <span className="text-sm text-muted-foreground">{meta.description}</span>
+              <span className="text-foreground text-base font-medium">
+                {meta.label}
+              </span>
+              <span className="text-muted-foreground text-sm">
+                {meta.description}
+              </span>
             </div>
           </li>
         )
@@ -21,4 +27,3 @@ export function CalendarLegend() {
     </ul>
   )
 }
-

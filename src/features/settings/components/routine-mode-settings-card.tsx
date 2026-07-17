@@ -1,6 +1,12 @@
 import { Briefcase } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
 import { ROUTINE_MODE_OPTIONS } from "@/constants/settings"
 import { cn } from "@/lib/utils"
 import type { StudySettings } from "@/types/study"
@@ -18,7 +24,7 @@ export function RoutineModeSettingsCard({
     <Card>
       <CardHeader>
         <div className="flex items-center gap-2">
-          <span className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <span className="bg-primary/10 text-primary flex size-8 items-center justify-center rounded-lg">
             <Briefcase className="size-4" />
           </span>
           <CardTitle className="text-xl">Modo da rotina</CardTitle>
@@ -33,17 +39,26 @@ export function RoutineModeSettingsCard({
             <button
               key={option.value}
               type="button"
-              onClick={() => !option.soon && updateSettings({ routineMode: option.value })}
+              onClick={() =>
+                !option.soon && updateSettings({ routineMode: option.value })
+              }
               disabled={option.soon}
               className={cn(
                 "flex items-start justify-between gap-3 rounded-xl border p-3 text-left transition-colors sm:items-center",
-                active ? "border-primary bg-primary/5" : "border-border hover:bg-muted",
-                option.soon && "cursor-not-allowed opacity-70 hover:bg-transparent",
+                active
+                  ? "border-primary bg-primary/5"
+                  : "border-border hover:bg-muted",
+                option.soon &&
+                  "cursor-not-allowed opacity-70 hover:bg-transparent",
               )}
             >
               <div className="flex min-w-0 flex-col">
-                <span className="text-sm font-medium text-foreground">{option.label}</span>
-                <span className="wrap-break-word text-sm text-muted-foreground">{option.desc}</span>
+                <span className="text-foreground text-sm font-medium">
+                  {option.label}
+                </span>
+                <span className="text-muted-foreground text-sm wrap-break-word">
+                  {option.desc}
+                </span>
               </div>
               {option.soon ? (
                 <Badge variant="secondary" className="shrink-0">
@@ -53,10 +68,14 @@ export function RoutineModeSettingsCard({
                 <span
                   className={cn(
                     "flex size-5 items-center justify-center rounded-full border",
-                    active ? "border-primary bg-primary" : "border-muted-foreground/40",
+                    active
+                      ? "border-primary bg-primary"
+                      : "border-muted-foreground/40",
                   )}
                 >
-                  {active ? <span className="size-2 rounded-full bg-primary-foreground" /> : null}
+                  {active ? (
+                    <span className="bg-primary-foreground size-2 rounded-full" />
+                  ) : null}
                 </span>
               )}
             </button>

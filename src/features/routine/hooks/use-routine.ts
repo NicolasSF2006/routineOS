@@ -47,12 +47,15 @@ export function useRoutine() {
     setHasCustomRoutine(Boolean(getStoredRoutine()))
   }, [])
 
-  const updateRoutine = useCallback((updater: (currentRoutine: Routine) => Routine) => {
-    const nextRoutine = updater(getActiveRoutine())
-    saveStoredRoutine(nextRoutine)
-    setRoutine(getActiveRoutine())
-    setHasCustomRoutine(Boolean(getStoredRoutine()))
-  }, [])
+  const updateRoutine = useCallback(
+    (updater: (currentRoutine: Routine) => Routine) => {
+      const nextRoutine = updater(getActiveRoutine())
+      saveStoredRoutine(nextRoutine)
+      setRoutine(getActiveRoutine())
+      setHasCustomRoutine(Boolean(getStoredRoutine()))
+    },
+    [],
+  )
 
   const resetRoutine = useCallback(() => {
     clearStoredRoutine()

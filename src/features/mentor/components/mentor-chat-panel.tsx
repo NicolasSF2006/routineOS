@@ -1,51 +1,77 @@
 "use client"
 
-import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
+import type { FormEvent, KeyboardEvent } from "react"
 import { AlertCircle, Bot, Send, Trash2, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
 import { STORAGE_EVENTS } from "@/constants/storage"
 import { MentorMessageBubble } from "@/features/mentor/components/mentor-message-bubble"
 import { buildMentorContext } from "@/features/mentor/utils/mentor-context"
 import { cn } from "@/lib/utils"
-import { clearMentorChat, loadMentorChat, saveMentorChat } from "@/lib/storage"
-import type { MentorApiResponse, MentorMessage } from "@/features/mentor/types"
+import {
+  clearMentorChat,
+  loadMentorChat,
+  saveMentorChat,
+  saveMentorRoutineDraft,
+} from "@/lib/storage"
+import type {
+  MentorAction,
+  MentorApiResponse,
+  MentorMessage,
+} from "@/features/mentor/types"
 import type { ViewKey } from "@/types/navigation"
 
 const INTRO_MESSAGE: MentorMessage = {
   id: "mentor-intro",
   role: "assistant",
   content:
-    "Olá! Eu sou seu mentor de estudos no RoutineOS. Posso te ajudar a revisar sua rotina, tirar dúvidas, sugerir projetos e organizar seus próximos passos.",
+    "Olá! Eu sou seu mentor de estudos no RoutineOS. Posso analisar sua rotina, tirar dúvidas, sugerir projetos e montar um novo rascunho de rotina com você.",
   createdAt: new Date(0).toISOString(),
 }
 
 const API_HISTORY_LIMIT = 16
 
 function createMessageId(): string {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+  if (
+    typeof crypto !== "undefined" &&
+    typeof crypto.randomUUID === "function"
+  ) {
     return crypto.randomUUID()
   }
 
   return `mentor-${Date.now()}-${Math.random().toString(36).slice(2)}`
 }
 
-function createMessage(role: MentorMessage["role"], content: string): MentorMessage {
+function createMessage(
+  role: MentorMessage["role"],
+  content: string,
+  action?: MentorAction,
+): MentorMessage {
   return {
     id: createMessageId(),
     role,
     content,
     createdAt: new Date().toISOString(),
+    action,
   }
 }
 
 export function MentorChatPanel({
   currentView,
   onClose,
+  onNavigate,
   className,
 }: {
   currentView: ViewKey
   onClose?: () => void
+  onNavigate?: (view: ViewKey) => void
   className?: string
 }) {
   const [messages, setMessages] = useState<MentorMessage[]>([])
@@ -64,7 +90,10 @@ export function MentorChatPanel({
 
     return () => {
       window.removeEventListener("storage", refreshMessages)
-      window.removeEventListener(STORAGE_EVENTS.mentorChatChanged, refreshMessages)
+      window.removeEventListener(
+        STORAGE_EVENTS.mentorChatChanged,
+        refreshMessages,
+      )
       window.removeEventListener(STORAGE_EVENTS.appDataChanged, refreshMessages)
     }
   }, [])
@@ -100,14 +129,19 @@ export function MentorChatPanel({
       })
 
       const payload = (await response.json().catch(() => null)) as
-        | (Partial<MentorApiResponse> & { error?: string })
-        | null
+        (Partial<MentorApiResponse> & { error?: string }) | null
 
       if (!response.ok || !payload?.reply) {
-        throw new Error(payload?.error ?? "Não foi possível falar com o Mentor IA agora.")
+        throw new Error(
+          payload?.error ?? "Não foi possível falar com o Mentor IA agora.",
+        )
       }
 
-      const assistantMessage = createMessage("assistant", payload.reply)
+      const assistantMessage = createMessage(
+        "assistant",
+        payload.reply,
+        payload.action,
+      )
       const updatedMessages = [...nextMessages, assistantMessage]
 
       setMessages(updatedMessages)
@@ -130,6 +164,14 @@ export function MentorChatPanel({
     }
   }
 
+  const handleMentorAction = (action: MentorAction) => {
+    if (action.type !== "propose-routine") return
+
+    saveMentorRoutineDraft(action.routine)
+    onNavigate?.("configurar-rotina")
+    onClose?.()
+  }
+
   const handleClearConversation = () => {
     if (messages.length === 0) return
 
@@ -148,11 +190,16 @@ export function MentorChatPanel({
   const canSend = draft.trim().length > 0 && !isLoading
 
   return (
-    <Card className={cn("flex h-full min-h-0 w-full flex-col overflow-hidden p-0 shadow-2xl", className)}>
-      <CardHeader className="shrink-0 border-b border-border/70 px-4 py-3 sm:px-5 sm:py-4">
+    <Card
+      className={cn(
+        "flex h-full min-h-0 w-full flex-col overflow-hidden p-0 shadow-2xl",
+        className,
+      )}
+    >
+      <CardHeader className="border-border/70 shrink-0 border-b px-4 py-3 sm:px-5 sm:py-4">
         <div className="flex min-w-0 items-start justify-between gap-3">
           <div className="flex min-w-0 items-start gap-3">
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            <span className="bg-primary/10 text-primary flex size-10 shrink-0 items-center justify-center rounded-xl">
               <Bot className="size-5" aria-hidden="true" />
             </span>
             <div className="min-w-0">
@@ -194,22 +241,26 @@ export function MentorChatPanel({
       </CardHeader>
 
       <CardContent className="flex min-h-0 flex-1 flex-col p-0">
-        <div className="flex-1 overflow-y-auto px-3 py-4 sm:px-5" aria-live="polite">
+        <div
+          className="flex-1 overflow-y-auto px-3 py-4 sm:px-5"
+          aria-live="polite"
+        >
           <div className="flex min-w-0 flex-col gap-3">
             {visibleMessages.map((message) => (
               <MentorMessageBubble
                 key={message.id}
                 message={message}
                 isIntro={message.id === INTRO_MESSAGE.id}
+                onAction={handleMentorAction}
               />
             ))}
 
             {isLoading ? (
               <div className="flex w-full min-w-0 justify-start gap-2">
-                <span className="mt-1 flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <span className="bg-primary/10 text-primary mt-1 flex size-8 shrink-0 items-center justify-center rounded-lg">
                   <Bot className="size-4" aria-hidden="true" />
                 </span>
-                <div className="rounded-xl border border-border/80 bg-muted/45 px-4 py-3 text-sm text-muted-foreground">
+                <div className="border-border/80 bg-muted/45 text-muted-foreground rounded-xl border px-4 py-3 text-sm">
                   Mentor está pensando...
                 </div>
               </div>
@@ -220,13 +271,19 @@ export function MentorChatPanel({
         </div>
 
         {error ? (
-          <div className="mx-3 mb-3 flex items-start gap-2 rounded-xl border border-destructive/25 bg-destructive/10 px-3 py-2 text-sm text-destructive sm:mx-5">
-            <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+          <div className="border-destructive/25 bg-destructive/10 text-destructive mx-3 mb-3 flex items-start gap-2 rounded-xl border px-3 py-2 text-sm sm:mx-5">
+            <AlertCircle
+              className="mt-0.5 size-4 shrink-0"
+              aria-hidden="true"
+            />
             <span className="wrap-break-word">{error}</span>
           </div>
         ) : null}
 
-        <form className="shrink-0 border-t border-border/70 p-3 sm:p-4" onSubmit={(event) => void handleSubmit(event)}>
+        <form
+          className="border-border/70 shrink-0 border-t p-3 sm:p-4"
+          onSubmit={(event) => void handleSubmit(event)}
+        >
           <label htmlFor="mentor-message" className="sr-only">
             Mensagem para o Mentor IA
           </label>
@@ -239,10 +296,14 @@ export function MentorChatPanel({
               placeholder="Pergunte sobre sua rotina, dúvidas de estudo ou próximos passos..."
               aria-label="Mensagem para o Mentor IA"
               rows={2}
-              className="wrap-break-word min-h-20 w-full min-w-0 resize-none rounded-xl border border-input bg-background px-3 py-2.5 text-sm leading-6 text-foreground outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 sm:min-h-12"
+              className="border-input bg-background text-foreground placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/30 min-h-20 w-full min-w-0 resize-none rounded-xl border px-3 py-2.5 text-sm leading-6 wrap-break-word transition-colors outline-none focus-visible:ring-3 sm:min-h-12"
               disabled={isLoading}
             />
-            <Button type="submit" className="min-h-11 sm:min-w-28" disabled={!canSend}>
+            <Button
+              type="submit"
+              className="min-h-11 sm:min-w-28"
+              disabled={!canSend}
+            >
               <Send className="size-4" aria-hidden="true" />
               Enviar
             </Button>

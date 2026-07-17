@@ -1,3 +1,4 @@
+import { fetchMentorProvider } from "@/features/mentor/server/provider-http-client"
 import {
   createContextMessage,
   MAX_MENTOR_OUTPUT_TOKENS,
@@ -22,7 +23,10 @@ function extractOpenAIText(payload: unknown): string | null {
     output?: unknown
   }
 
-  if (typeof response.output_text === "string" && response.output_text.trim().length > 0) {
+  if (
+    typeof response.output_text === "string" &&
+    response.output_text.trim().length > 0
+  ) {
     return response.output_text.trim()
   }
 
@@ -73,7 +77,7 @@ export async function createOpenAIMentorReply({
     },
   ]
 
-  const response = await fetch(OPENAI_RESPONSES_URL, {
+  const response = await fetchMentorProvider("openai", OPENAI_RESPONSES_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -86,10 +90,6 @@ export async function createOpenAIMentorReply({
       max_output_tokens: MAX_MENTOR_OUTPUT_TOKENS,
     }),
   })
-
-  if (!response.ok) {
-    throw new Error("A OpenAI não retornou uma resposta válida.")
-  }
 
   const payload = (await response.json()) as unknown
   const reply = extractOpenAIText(payload)

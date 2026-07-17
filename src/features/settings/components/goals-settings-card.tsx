@@ -1,5 +1,11 @@
 import { Target } from "lucide-react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import type { StudySettings } from "@/types/study"
@@ -9,12 +15,15 @@ interface GoalsSettingsCardProps {
   updateSettings: (patch: Partial<StudySettings>) => void
 }
 
-export function GoalsSettingsCard({ settings, updateSettings }: GoalsSettingsCardProps) {
+export function GoalsSettingsCard({
+  settings,
+  updateSettings,
+}: GoalsSettingsCardProps) {
   return (
     <Card>
       <CardHeader>
         <div className="flex items-center gap-2">
-          <span className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <span className="bg-primary/10 text-primary flex size-8 items-center justify-center rounded-lg">
             <Target className="size-4" />
           </span>
           <CardTitle className="text-xl">Metas</CardTitle>
@@ -28,7 +37,9 @@ export function GoalsSettingsCard({ settings, updateSettings }: GoalsSettingsCar
             id="meta-diaria"
             type="number"
             value={settings.dailyGoalHours}
-            onChange={(e) => updateSettings({ dailyGoalHours: Number(e.target.value) || 0 })}
+            onChange={(e) =>
+              updateSettings({ dailyGoalHours: Number(e.target.value) || 0 })
+            }
             min={0}
             max={24}
           />
@@ -39,7 +50,9 @@ export function GoalsSettingsCard({ settings, updateSettings }: GoalsSettingsCar
             id="meta-mensal"
             type="number"
             value={settings.monthlyGoalHours}
-            onChange={(e) => updateSettings({ monthlyGoalHours: Number(e.target.value) || 0 })}
+            onChange={(e) =>
+              updateSettings({ monthlyGoalHours: Number(e.target.value) || 0 })
+            }
             min={0}
           />
         </div>
@@ -50,7 +63,9 @@ export function GoalsSettingsCard({ settings, updateSettings }: GoalsSettingsCar
             type="number"
             value={settings.latenessToleranceMinutes}
             onChange={(e) =>
-              updateSettings({ latenessToleranceMinutes: Number(e.target.value) || 0 })
+              updateSettings({
+                latenessToleranceMinutes: Number(e.target.value) || 0,
+              })
             }
             min={0}
             max={120}
@@ -60,4 +75,3 @@ export function GoalsSettingsCard({ settings, updateSettings }: GoalsSettingsCar
     </Card>
   )
 }
-

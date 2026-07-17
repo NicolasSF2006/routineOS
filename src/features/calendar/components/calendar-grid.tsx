@@ -38,7 +38,7 @@ export function CalendarGrid({
             {WEEK_HEADERS.map((weekDay) => (
               <div
                 key={weekDay}
-                className="py-1 text-center text-sm font-medium text-muted-foreground"
+                className="text-muted-foreground py-1 text-center text-sm font-medium"
               >
                 {weekDay}
               </div>
@@ -60,9 +60,10 @@ export function CalendarGrid({
                   type="button"
                   onClick={() => onSelectDay(day)}
                   className={cn(
-                    "flex aspect-square min-h-10 flex-col items-center justify-center rounded-lg border text-sm font-medium transition-all hover:scale-[1.03] hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    "focus-visible:ring-ring flex aspect-square min-h-10 flex-col items-center justify-center rounded-lg border text-sm font-medium transition-all hover:scale-[1.03] hover:shadow-sm focus-visible:ring-2 focus-visible:outline-none",
                     meta.cell,
-                    isToday && "border-cyan-400 ring-2 ring-cyan-400/70 ring-offset-2 ring-offset-background",
+                    isToday &&
+                      "ring-offset-background border-cyan-400 ring-2 ring-cyan-400/70 ring-offset-2",
                   )}
                   aria-label={`Dia ${day}: ${meta.label}`}
                 >

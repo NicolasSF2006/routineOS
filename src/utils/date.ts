@@ -13,8 +13,22 @@ const MONTH_NAMES = [
   "Dezembro",
 ]
 
+const TEST_NOW =
+  process.env.NODE_ENV !== "production"
+    ? process.env.NEXT_PUBLIC_ROUTINEOS_TEST_NOW
+    : undefined
+
+export function getCurrentDate(): Date {
+  if (TEST_NOW) {
+    const fixedDate = new Date(TEST_NOW)
+    if (!Number.isNaN(fixedDate.getTime())) return fixedDate
+  }
+
+  return new Date()
+}
+
 export function getTodayDateKey(): string {
-  return toDateKey(new Date())
+  return toDateKey(getCurrentDate())
 }
 
 export function toDateKey(date: Date): string {
@@ -29,7 +43,11 @@ export function parseDateKey(dateKey: string): Date {
   return new Date(y, m - 1, d)
 }
 
-export function dateKeyFromParts(year: number, month: number, day: number): string {
+export function dateKeyFromParts(
+  year: number,
+  month: number,
+  day: number,
+): string {
   return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`
 }
 
@@ -47,7 +65,7 @@ export function getMonthLabel(year: number, month: number): string {
 }
 
 export function getCurrentMonthMeta(): { year: number; month: number } {
-  const now = new Date()
+  const now = getCurrentDate()
   return { year: now.getFullYear(), month: now.getMonth() }
 }
 

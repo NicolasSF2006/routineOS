@@ -62,7 +62,9 @@ export function CalendarioView() {
             </Accordion>
           </Card>
           <Card className="hidden h-full p-4 lg:block">
-            <h3 className="mb-3 text-xl font-semibold text-foreground">Legenda de cores</h3>
+            <h3 className="text-foreground mb-3 text-xl font-semibold">
+              Legenda de cores
+            </h3>
             <CalendarLegend />
           </Card>
         </div>
@@ -78,7 +80,9 @@ export function CalendarioView() {
 
         <div className="order-3 h-full">
           <Card className="flex h-full flex-col p-4">
-            <h3 className="mb-4 text-xl font-semibold text-foreground">Estatísticas do mês</h3>
+            <h3 className="text-foreground mb-4 text-xl font-semibold">
+              Estatísticas do mês
+            </h3>
             <CalendarStats monthStats={monthStats} />
           </Card>
         </div>

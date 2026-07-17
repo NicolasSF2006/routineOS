@@ -1,3 +1,4 @@
+import { fetchMentorProvider } from "@/features/mentor/server/provider-http-client"
 import {
   createContextMessage,
   MAX_MENTOR_OUTPUT_TOKENS,
@@ -15,7 +16,11 @@ type GeminiContent = {
   parts: Array<{ text: string }>
 }
 
-function buildGeminiContents({ message, history, context }: MentorProviderRequest): GeminiContent[] {
+function buildGeminiContents({
+  message,
+  history,
+  context,
+}: MentorProviderRequest): GeminiContent[] {
   return [
     {
       role: "user",
@@ -72,7 +77,7 @@ export async function createGeminiMentorReply({
   request: MentorProviderRequest
 }): Promise<string> {
   const endpoint = `${GEMINI_BASE_URL}/${GEMINI_API_VERSION}/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`
-  const response = await fetch(endpoint, {
+  const response = await fetchMentorProvider("gemini", endpoint, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -88,10 +93,6 @@ export async function createGeminiMentorReply({
       },
     }),
   })
-
-  if (!response.ok) {
-    throw new Error("O Gemini não retornou uma resposta válida.")
-  }
 
   const payload = (await response.json()) as unknown
   const reply = extractGeminiText(payload)

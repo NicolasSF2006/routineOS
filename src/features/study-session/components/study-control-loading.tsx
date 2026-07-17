@@ -3,10 +3,9 @@ import { StudyControlHeader } from "@/features/study-session/components/study-co
 
 export function StudyControlLoading() {
   return (
-    <Card className="overflow-hidden border-border/80">
+    <Card className="border-border/80 overflow-hidden">
       <StudyControlHeader />
-      <div className="p-5 text-sm text-muted-foreground">Carregando...</div>
+      <div className="text-muted-foreground p-5 text-sm">Carregando...</div>
     </Card>
   )
 }
-

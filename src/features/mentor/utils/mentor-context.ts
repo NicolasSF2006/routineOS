@@ -14,7 +14,11 @@ import {
   loadMentorTrails,
   loadSettings,
 } from "@/lib/storage"
-import { dateKeyFromParts, getCurrentMonthMeta, getTodayDateKey } from "@/utils/date"
+import {
+  dateKeyFromParts,
+  getCurrentMonthMeta,
+  getTodayDateKey,
+} from "@/utils/date"
 import type {
   MentorContext,
   MentorContextBlock,
@@ -42,7 +46,10 @@ function getStoredTheme(): Theme | null {
   return theme === "light" || theme === "dark" ? theme : null
 }
 
-function summarizeBlocks(routine: Routine, dateKey: string): MentorContextBlock[] {
+function summarizeBlocks(
+  routine: Routine,
+  dateKey: string,
+): MentorContextBlock[] {
   return getRoutineDayBlocksForDateKey(routine, dateKey)
     .slice(0, MAX_BLOCKS_PER_DAY)
     .map((block) => ({
@@ -54,7 +61,10 @@ function summarizeBlocks(routine: Routine, dateKey: string): MentorContextBlock[
     }))
 }
 
-function summarizeDayRoutine(routine: Routine, dateKey: string): MentorContextDayRoutine {
+function summarizeDayRoutine(
+  routine: Routine,
+  dateKey: string,
+): MentorContextDayRoutine {
   const weekday = getWeekdayFromDateKey(dateKey)
   const blocks = summarizeBlocks(routine, dateKey)
 
@@ -63,11 +73,13 @@ function summarizeDayRoutine(routine: Routine, dateKey: string): MentorContextDa
     weekday,
     weekdayLabel: formatWeekdayName(weekday),
     hasRoutine: blocks.length > 0,
-    plannedMinutes: blocks.reduce((total, block) => total + block.durationMinutes, 0),
+    plannedMinutes: blocks.reduce(
+      (total, block) => total + block.durationMinutes,
+      0,
+    ),
     blocks,
   }
 }
-
 
 function normalizeTopicTitle(value: string): string {
   return value
@@ -80,19 +92,31 @@ function normalizeTopicTitle(value: string): string {
 }
 
 function createTopicId(title: string): string {
-  return normalizeTopicTitle(title).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "tema"
+  return (
+    normalizeTopicTitle(title)
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "") || "tema"
+  )
 }
 
 function isStudyBlock(block: MentorContextBlock): boolean {
-  return STUDY_BLOCK_TYPES.includes(block.type as (typeof STUDY_BLOCK_TYPES)[number])
+  return STUDY_BLOCK_TYPES.includes(
+    block.type as (typeof STUDY_BLOCK_TYPES)[number],
+  )
 }
 
 function getMonthDateKeys(year: number, month: number): string[] {
   const lastDay = new Date(year, month + 1, 0).getDate()
-  return Array.from({ length: lastDay }, (_, index) => dateKeyFromParts(year, month, index + 1))
+  return Array.from({ length: lastDay }, (_, index) =>
+    dateKeyFromParts(year, month, index + 1),
+  )
 }
 
-function summarizeMonthRoutine(routine: Routine, year: number, month: number): MentorContext["monthRoutine"] {
+function summarizeMonthRoutine(
+  routine: Routine,
+  year: number,
+  month: number,
+): MentorContext["monthRoutine"] {
   const dateKeys = getMonthDateKeys(year, month)
   const groupedTopics = new Map<string, MentorContextMonthTopic>()
   let studyBlockCount = 0
@@ -109,7 +133,8 @@ function summarizeMonthRoutine(routine: Routine, year: number, month: number): M
       const current = groupedTopics.get(id)
 
       if (current) {
-        if (!current.sourceBlocks.includes(title)) current.sourceBlocks.push(title)
+        if (!current.sourceBlocks.includes(title))
+          current.sourceBlocks.push(title)
         if (!current.days.includes(dateKey)) current.days.push(dateKey)
         current.occurrenceCount += 1
         current.totalMinutes += block.durationMinutes
@@ -135,7 +160,10 @@ function summarizeMonthRoutine(routine: Routine, year: number, month: number): M
   }
 }
 
-function summarizeMonthHistory(year: number, month: number): MentorContextMonthRecord[] {
+function summarizeMonthHistory(
+  year: number,
+  month: number,
+): MentorContextMonthRecord[] {
   const monthPrefix = `${year}-${String(month + 1).padStart(2, "0")}-`
   const records = loadAllRecords()
 
@@ -182,8 +210,14 @@ function summarizeStudyTrail(): MentorContext["studyTrail"] {
     routineName: activeTrail.routineName,
     topics: activeTrail.topics.slice(0, 30).map((topic) => {
       const resources = [
-        ...topic.resources.map((resource) => ({ resource, section: "resource" as const })),
-        ...(topic.videoResources ?? []).map((resource) => ({ resource, section: "video" as const })),
+        ...topic.resources.map((resource) => ({
+          resource,
+          section: "resource" as const,
+        })),
+        ...(topic.videoResources ?? []).map((resource) => ({
+          resource,
+          section: "video" as const,
+        })),
       ]
       const favoriteIds = new Set(topic.favoriteResourceIds ?? [])
       const studiedIds = new Set(topic.studiedResourceIds ?? [])
@@ -196,13 +230,19 @@ function summarizeStudyTrail(): MentorContext["studyTrail"] {
         masteryStatus: topic.masteryStatus ?? null,
         favoriteResources: resources
           .filter(({ resource }) => favoriteIds.has(resource.id))
-          .map(({ resource, section }) => summarizeTrailResource(resource, section)),
+          .map(({ resource, section }) =>
+            summarizeTrailResource(resource, section),
+          ),
         studiedResources: resources
           .filter(({ resource }) => studiedIds.has(resource.id))
-          .map(({ resource, section }) => summarizeTrailResource(resource, section)),
+          .map(({ resource, section }) =>
+            summarizeTrailResource(resource, section),
+          ),
         hiddenResources: resources
           .filter(({ resource }) => hiddenIds.has(resource.id))
-          .map(({ resource, section }) => summarizeTrailResource(resource, section)),
+          .map(({ resource, section }) =>
+            summarizeTrailResource(resource, section),
+          ),
         userCourses: (topic.userCourses ?? []).map((course) => ({
           id: course.id,
           title: course.title,
@@ -217,7 +257,11 @@ function summarizeStudyTrail(): MentorContext["studyTrail"] {
   }
 }
 
-export function buildMentorContext({ currentView }: { currentView: ViewKey }): MentorContext {
+export function buildMentorContext({
+  currentView,
+}: {
+  currentView: ViewKey
+}): MentorContext {
   const today = getTodayDateKey()
   const routine = getActiveRoutine()
   const settings = loadSettings()
@@ -235,10 +279,14 @@ export function buildMentorContext({ currentView }: { currentView: ViewKey }): M
       hasCustomRoutine: Boolean(getStoredRoutine()),
     },
     todayRoutine: summarizeDayRoutine(routine, today),
-    weekRoutine: getCurrentWeekDays(new Date()).map((day) => summarizeDayRoutine(routine, day.dateKey)),
+    weekRoutine: getCurrentWeekDays(new Date()).map((day) =>
+      summarizeDayRoutine(routine, day.dateKey),
+    ),
     monthSummary: {
       completedDays: monthStats.completedDays,
-      canceledDays: monthHistory.filter((record) => record.status === "canceled").length,
+      canceledDays: monthHistory.filter(
+        (record) => record.status === "canceled",
+      ).length,
       missedDays: monthStats.missedDays,
       studiedMinutes: minutesFromSeconds(monthStats.studiedSeconds),
       remainingMinutes: minutesFromSeconds(monthStats.remainingSeconds),

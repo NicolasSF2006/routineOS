@@ -1,173 +1,97 @@
 # RoutineOS
 
-**RoutineOS** é uma aplicação web para organização e acompanhamento de rotinas de estudo.
+Aplicação web responsiva para criar rotinas de estudo, acompanhar sessões e calendário, gerar trilhas e conversar com um Mentor IA. Os dados do usuário permanecem no navegador e podem ser exportados em backup.
 
-O projeto permite configurar rotinas semanais e mensais, acompanhar sessões de estudo, visualizar progresso em calendário, personalizar sons e manter os dados protegidos por backup local.
+## Funcionalidades
 
-🔗 **Deploy:** https://routineos-app.vercel.app/  
-📦 **Repositório:** https://github.com/NicolasSF2006/routineOS
+- rotina semanal/mensal vazia no primeiro acesso;
+- construtor com blocos, recorrência, conflitos, drag-and-drop, swipe e desfazer/refazer;
+- sessões, presença, pausas, conclusão e calendário;
+- trilhas por tema com recursos, cursos, favoritos e progresso local;
+- Mentor IA com Gemini, Groq, OpenRouter e OpenAI, modos manual/automático e fallback;
+- configurações, temas, sons e backup/restauração.
 
----
+## Stack e requisitos
 
-## Sobre o projeto
+Next.js 16, React 19, TypeScript estrito, Tailwind CSS 4, Base UI/shadcn, Vitest, Testing Library e Playwright. Use Node.js 22 e npm compatível com o lockfile.
 
-O RoutineOS foi desenvolvido com o objetivo de transformar a organização dos estudos em uma experiência mais visual, prática e personalizável.
-
-A aplicação funciona diretamente no navegador, utilizando persistência local para salvar rotinas, histórico, configurações, preferências de tema, sons personalizados e backups. O foco do projeto é oferecer uma experiência simples para o usuário, mas com funcionalidades completas o suficiente para uso real no dia a dia.
-
----
-
-## Funcionalidades principais
-
-- Criação de rotinas de estudo por semana e mês.
-- Configurador visual de rotina com blocos personalizados.
-- Drag-and-drop para organizar tarefas, pausas, almoço, projetos e outros blocos.
-- Controle de sessão de estudo com início, pausa, conclusão, cancelamento e retomada.
-- Modo automático ou manual para avanço entre tarefas.
-- Calendário com histórico e status dos dias.
-- Configurações de aparência e tema.
-- Personalização de sons da rotina.
-- Importação de áudios personalizados.
-- Exportação e importação de backup em JSON.
-- Reset completo dos dados locais.
-- Tutorial inicial para novos usuários.
-- Persistência da última tela acessada.
-- Interface responsiva para desktop, tablet e mobile.
-
----
-
-## Tecnologias utilizadas
-
-- Next.js
-- React
-- TypeScript
-- Tailwind CSS
-- LocalStorage
-- Vercel
-
----
-
-## Estrutura geral
-
-```txt
-src/
-├── app/
-├── components/
-│   ├── layout/
-│   ├── providers/
-│   ├── shared/
-│   └── ui/
-├── constants/
-├── features/
-│   ├── calendar/
-│   ├── onboarding/
-│   ├── routine/
-│   ├── routine-builder/
-│   ├── settings/
-│   └── study-session/
-├── lib/
-├── styles/
-└── types/
-```
-
----
-
-## Como rodar localmente
-
-Clone o repositório:
+## Instalação
 
 ```bash
-git clone https://github.com/NicolasSF2006/routineOS.git
-```
-
-Entre na pasta do projeto:
-
-```bash
-cd routineOS
-```
-
-Instale as dependências:
-
-```bash
-npm install
-```
-
-Rode o servidor de desenvolvimento:
-
-```bash
+npm ci
+cp .env.example .env.local
 npm run dev
 ```
 
-Acesse no navegador:
+A aplicação abre em `http://localhost:3000`. Nenhuma chave é obrigatória: sem provedores configurados, o Mentor usa o modo local.
 
-```txt
-http://localhost:3000
-```
+## Variáveis de ambiente
 
----
+Todas são exclusivas do servidor. Nunca use `NEXT_PUBLIC_` para chaves.
 
-## Scripts disponíveis
+| Variável                                  | Valores/uso                                         |
+| ----------------------------------------- | --------------------------------------------------- |
+| `MENTOR_AI_PROVIDER`                      | `auto`, `gemini`, `groq`, `openrouter` ou `openai`  |
+| `GEMINI_API_KEY` / `GEMINI_MODEL`         | credencial e modelo Gemini                          |
+| `GROQ_API_KEY` / `GROQ_MODEL`             | credencial e modelo Groq                            |
+| `OPENROUTER_API_KEY` / `OPENROUTER_MODEL` | credencial e modelo OpenRouter                      |
+| `OPENAI_API_KEY` / `OPENAI_MODEL`         | credencial e modelo OpenAI                          |
+| `RATE_LIMIT_TRUST_PROXY_HOPS`             | quantidade exata de proxies controlados; padrão `0` |
+
+No modo `auto`, a ordem preservada é Gemini → Groq → OpenRouter → OpenAI. O comando `/provedores` envia uma solicitação curta a cada provedor configurado.
+
+## Scripts
 
 ```bash
 npm run dev
-```
-
-Inicia o ambiente de desenvolvimento.
-
-```bash
-npm run build
-```
-
-Gera a versão de produção.
-
-```bash
+npm run lint
 npm run typecheck
+npm run test
+npm run test:watch
+npm run test:coverage
+npm run test:e2e
+npm run test:e2e:ui
+npm run test:a11y
+npm run test:visual
+npm run test:visual:update  # atualização explícita
+npm run build
+npm run check
 ```
 
-Executa a verificação de tipos do TypeScript.
+`check` executa formatação, lint, tipos, testes unitários e build. E2E, axe e regressão visual ficam separados por custo.
 
----
+## Estrutura
 
-## Persistência de dados
+```text
+src/
+  app/                    páginas, limites de erro e APIs
+  components/             UI, layout e componentes compartilhados
+  features/               rotina, Mentor, trilhas, calendário, sessão e configurações
+    routine/domain/       regras puras de horários e conflitos
+    mentor/server/        roteamento, provedores, transporte e observabilidade
+  server/                 utilitários HTTP e proteções de rota
+  lib/storage.ts          fachada compatível de persistência e migração
+tests/
+  unit/ integration/      Vitest e fixtures determinísticas
+  e2e/ visual/ a11y/      Playwright, snapshots e axe
+docs/                     arquitetura e operação
+```
 
-O RoutineOS utiliza `localStorage` para armazenar os dados no próprio navegador do usuário.
+Detalhes: [arquitetura](docs/ARCHITECTURE.md), [domínio](docs/DOMAIN.md), [Mentor](docs/MENTOR_AI.md), [armazenamento](docs/STORAGE.md) e [testes](docs/TESTING.md).
 
-São salvos localmente:
+## Deploy e segurança
 
-- rotina ativa;
-- histórico de estudos;
-- configurações;
-- tema;
-- sons personalizados;
-- última tela acessada;
-- status do tutorial inicial.
+O build é autocontido e não exige plataforma específica. Configure variáveis somente no servidor, execute `npm ci && npm run check` e siga [DEPLOYMENT.md](docs/DEPLOYMENT.md). As rotas limitam payload, taxa e tempo; Markdown não aceita HTML bruto; logs não contêm prompts ou chaves. Consulte [SECURITY.md](docs/SECURITY.md) e [PRIVACY-NOTES.md](docs/PRIVACY-NOTES.md).
 
-A aplicação também possui recursos de **exportação** e **importação de backup**, permitindo que o usuário salve seus dados em um arquivo `.json`.
+## Troubleshooting
 
----
+- Mentor em modo local: confira a chave do provedor e `MENTOR_AI_PROVIDER`.
+- Playwright sem navegador: `npx playwright install chromium`; em ambiente com Chromium do sistema, defina `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`.
+- Snapshot diferente: revise a imagem; só então rode `npm run test:visual:update`.
+- Dados antigos: exporte backup antes de atualizar e veja a estratégia de migração em [STORAGE.md](docs/STORAGE.md).
 
-## Status do projeto
+## Contribuição
 
-Versão atual: **MVP v1.0.0**
+Leia [CONTRIBUTING.md](CONTRIBUTING.md). Não altere contratos persistidos, fallback, classes visuais ou textos sem uma decisão explícita e testes de compatibilidade.
 
-O projeto já possui as principais funcionalidades implementadas e está em fase de refinamento para apresentação em portfólio.
-
----
-
-## Próximas melhorias possíveis
-
-- Rotinas modelo para novos usuários.
-- Melhorias de acessibilidade.
-- Relatórios mais detalhados de desempenho.
-- Estatísticas semanais e mensais avançadas.
-- Sincronização em nuvem.
-- Login de usuário.
-- Integração com notificações.
-
----
-
-## Autor
-
-Desenvolvido por **Nicolas Silva Frazão**.
-
-GitHub: https://github.com/NicolasSF2006
+O runtime suportado é Node 22 (`>=22 <23`). `npm run check` executa formatação, lint, tipos, unitários e build; antes de merge, execute também cobertura, E2E, acessibilidade e regressão visual conforme [docs/TESTING.md](docs/TESTING.md).

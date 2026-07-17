@@ -3,6 +3,9 @@ export function timeToMinutes(time: string): number {
   return h * 60 + m
 }
 
-export function calculateDurationMinutes(startTime: string, endTime: string): number {
+export function calculateDurationMinutes(
+  startTime: string,
+  endTime: string,
+): number {
   return Math.max(0, timeToMinutes(endTime) - timeToMinutes(startTime))
 }

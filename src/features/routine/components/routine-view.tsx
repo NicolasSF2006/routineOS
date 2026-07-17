@@ -7,7 +7,10 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { PageHeading } from "@/components/shared/page-heading"
 import { StudyControl } from "@/features/study-session/components/study-control"
 import { StudyTopicDialog } from "@/features/trails/components/study-topic-dialog"
-import { createStudyTrailTopicFromTitle, findTrailTopicByTitle } from "@/features/mentor/utils/study-trail"
+import {
+  createStudyTrailTopicFromTitle,
+  findTrailTopicByTitle,
+} from "@/features/mentor/utils/study-trail"
 import { useStudySession } from "@/features/study-session/hooks/use-study-session"
 import { RoutineBlockRow } from "@/features/routine/components/routine-block-row"
 import { useRoutineSchedule } from "@/features/routine/hooks/use-routine-schedule"
@@ -26,6 +29,7 @@ function getSelectedDateRelation(dateKey: string): "past" | "today" | "future" {
 export function RoutineView() {
   const {
     routine,
+    hasCustomRoutine,
     activeDateKey,
     setActiveDateKey,
     activeDate,
@@ -36,8 +40,13 @@ export function RoutineView() {
     goToNextWeek,
   } = useRoutineSchedule()
   const [autoAdvance, setAutoAdvance] = useState(false)
-  const [studyTopic, setStudyTopic] = useState<ReturnType<typeof createStudyTrailTopicFromTitle> | null>(null)
-  const monthLabel = getMonthLabel(activeDate.getFullYear(), activeDate.getMonth())
+  const [studyTopic, setStudyTopic] = useState<ReturnType<
+    typeof createStudyTrailTopicFromTitle
+  > | null>(null)
+  const monthLabel = getMonthLabel(
+    activeDate.getFullYear(),
+    activeDate.getMonth(),
+  )
   const hasRoutine = activeBlocks.length > 0
   const selectedDateRelation = getSelectedDateRelation(activeDateKey)
   const isActionableDate = selectedDateRelation === "today"
@@ -89,7 +98,11 @@ export function RoutineView() {
               <ChevronLeft className="size-4" />
             </Button>
 
-            <div className="min-w-0 flex-1 overflow-x-auto overscroll-x-contain pb-1">
+            <div
+              className="min-w-0 flex-1 overflow-x-auto overscroll-x-contain pb-1"
+              tabIndex={0}
+              aria-label="Dias da semana"
+            >
               <TabsList className="!h-auto min-w-max justify-start gap-1 p-1 sm:grid sm:w-full sm:grid-cols-7">
                 {currentWeekDays.map((day) => (
                   <TabsTrigger
@@ -97,11 +110,11 @@ export function RoutineView() {
                     value={day.dateKey}
                     className={cn(
                       "!h-auto min-w-20 flex-col gap-0.5 px-3 py-2 text-sm sm:min-w-0 sm:text-sm",
-                      day.isToday && "ring-1 ring-primary/35",
+                      day.isToday && "ring-primary/35 ring-1",
                     )}
                   >
                     <span>{day.short}</span>
-                    <span className="font-mono text-base font-semibold tabular-nums leading-none">
+                    <span className="font-mono text-base leading-none font-semibold tabular-nums">
                       {day.dayNumber}
                     </span>
                   </TabsTrigger>
@@ -126,7 +139,11 @@ export function RoutineView() {
             const hasBlocks = blocks.length > 0
 
             return (
-              <TabsContent key={day.dateKey} value={day.dateKey} className="mt-4 w-full max-w-full">
+              <TabsContent
+                key={day.dateKey}
+                value={day.dateKey}
+                className="mt-4 w-full max-w-full"
+              >
                 <div className="flex w-full max-w-full flex-col gap-2">
                   {hasBlocks ? (
                     blocks.map((block, index) => (
@@ -134,16 +151,19 @@ export function RoutineView() {
                         key={block.id}
                         block={block}
                         isCurrent={
-                          day.dateKey === activeDateKey && index === highlightedBlockIndex
+                          day.dateKey === activeDateKey &&
+                          index === highlightedBlockIndex
                         }
                         onOpenStudy={handleOpenStudy}
                       />
                     ))
                   ) : (
-                    <div className="rounded-xl border border-border/70 bg-muted/40 px-4 py-6 text-center text-sm font-medium text-muted-foreground">
-                      {day.dateKey === todayKey
-                        ? "Hoje não tem tarefas. Descanse."
-                        : "Este dia não tem tarefas programadas."}
+                    <div className="border-border/70 bg-muted/40 text-muted-foreground rounded-xl border px-4 py-6 text-center text-sm font-medium">
+                      {!hasCustomRoutine
+                        ? "Nenhuma rotina foi criada ainda. Use a aba Montar rotina para começar."
+                        : day.dateKey === todayKey
+                          ? "Hoje não tem tarefas. Descanse."
+                          : "Este dia não tem tarefas programadas."}
                     </div>
                   )}
                 </div>
@@ -156,6 +176,7 @@ export function RoutineView() {
           <StudyControl
             session={session}
             hasRoutine={hasRoutine}
+            hasConfiguredRoutine={hasCustomRoutine}
             selectedDateRelation={selectedDateRelation}
             autoAdvance={autoAdvance}
             onAutoAdvanceChange={setAutoAdvance}

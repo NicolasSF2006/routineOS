@@ -84,4 +84,3 @@ Não queremos criar burocracia.
 Não queremos exigir dezenas de configurações para começar.
 
 Não queremos que o usuário sinta culpa por perder um dia.
-

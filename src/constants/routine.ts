@@ -1,8 +1,6 @@
-import { calculateDurationMinutes } from "@/utils/time"
 import type {
   BlockTypeMeta,
   Routine,
-  RoutineBlock,
   RoutineBlockType,
   RoutineDay,
   Subject,
@@ -35,9 +33,27 @@ export const WEEKDAY_BY_DATE_INDEX: Record<number, Weekday> = {
 }
 
 export const DEFAULT_SUBJECTS: Subject[] = [
-  { id: "linux", name: "Linux", category: "Tecnologia", color: "chart-1", isActive: true },
-  { id: "react", name: "React", category: "Tecnologia", color: "chart-1", isActive: true },
-  { id: "ingles", name: "Inglês", category: "Idioma", color: "chart-1", isActive: true },
+  {
+    id: "linux",
+    name: "Linux",
+    category: "Tecnologia",
+    color: "chart-1",
+    isActive: true,
+  },
+  {
+    id: "react",
+    name: "React",
+    category: "Tecnologia",
+    color: "chart-1",
+    isActive: true,
+  },
+  {
+    id: "ingles",
+    name: "Inglês",
+    category: "Idioma",
+    color: "chart-1",
+    isActive: true,
+  },
   {
     id: "oracle-sql",
     name: "Oracle SQL",
@@ -94,132 +110,22 @@ export const BLOCK_TYPE_META: Record<RoutineBlockType, BlockTypeMeta> = {
   },
 }
 
-const DEFAULT_ROUTINE_BLOCK_TEMPLATES: Omit<RoutineBlock, "id">[] = [
-  {
-    type: "study",
-    subjectId: "linux",
-    title: "Linux",
-    startTime: "10:30",
-    endTime: "11:20",
-    durationMinutes: calculateDurationMinutes("10:30", "11:20"),
-    order: 1,
-  },
-  {
-    type: "short-break",
-    title: "Pausa curta",
-    startTime: "11:20",
-    endTime: "11:25",
-    durationMinutes: calculateDurationMinutes("11:20", "11:25"),
-    order: 2,
-  },
-  {
-    type: "study",
-    subjectId: "react",
-    title: "React",
-    startTime: "11:25",
-    endTime: "12:15",
-    durationMinutes: calculateDurationMinutes("11:25", "12:15"),
-    order: 3,
-  },
-  {
-    type: "long-break",
-    title: "Pausa longa",
-    startTime: "12:15",
-    endTime: "12:30",
-    durationMinutes: calculateDurationMinutes("12:15", "12:30"),
-    order: 4,
-  },
-  {
-    type: "study",
-    subjectId: "ingles",
-    title: "Inglês",
-    startTime: "12:30",
-    endTime: "13:20",
-    durationMinutes: calculateDurationMinutes("12:30", "13:20"),
-    order: 5,
-  },
-  {
-    type: "lunch",
-    title: "Almoço",
-    startTime: "13:20",
-    endTime: "14:20",
-    durationMinutes: calculateDurationMinutes("13:20", "14:20"),
-    order: 6,
-  },
-  {
-    type: "study",
-    subjectId: "oracle-sql",
-    title: "Oracle SQL",
-    startTime: "14:20",
-    endTime: "15:10",
-    durationMinutes: calculateDurationMinutes("14:20", "15:10"),
-    order: 7,
-  },
-  {
-    type: "short-break",
-    title: "Pausa curta",
-    startTime: "15:10",
-    endTime: "15:15",
-    durationMinutes: calculateDurationMinutes("15:10", "15:15"),
-    order: 8,
-  },
-  {
-    type: "study",
-    subjectId: "algoritmos",
-    title: "Algoritmos",
-    startTime: "15:15",
-    endTime: "16:05",
-    durationMinutes: calculateDurationMinutes("15:15", "16:05"),
-    order: 9,
-  },
-  {
-    type: "long-break",
-    title: "Pausa longa",
-    startTime: "16:05",
-    endTime: "16:20",
-    durationMinutes: calculateDurationMinutes("16:05", "16:20"),
-    order: 10,
-  },
-  {
-    type: "project",
-    subjectId: "projeto-escola",
-    title: "Projeto Escola",
-    startTime: "16:20",
-    endTime: "17:40",
-    durationMinutes: calculateDurationMinutes("16:20", "17:40"),
-    order: 11,
-  },
-]
-
-function createDefaultRoutineBlocks(weekday: Weekday): RoutineBlock[] {
-  return DEFAULT_ROUTINE_BLOCK_TEMPLATES.map((block) => ({
-    ...block,
-    id: `${weekday}-${block.order}`,
-  }))
-}
-
-function createDefaultRoutineDay(weekday: Weekday, isActive: boolean): RoutineDay {
+function createEmptyRoutineDay(weekday: Weekday): RoutineDay {
   return {
-    id: `default-${weekday}`,
+    id: `empty-${weekday}`,
     weekday,
-    blocks: isActive ? createDefaultRoutineBlocks(weekday) : [],
-    isActive,
+    blocks: [],
+    isActive: false,
   }
 }
 
+export const LEGACY_DEFAULT_ROUTINE_ID = "default-study-routine"
+
 export const DEFAULT_ROUTINE: Routine = {
-  id: "default-study-routine",
-  name: "Rotina padrão de estudos",
+  id: "empty-study-routine",
+  name: "Minha rotina",
   mode: "no-work",
-  days: [
-    createDefaultRoutineDay("monday", true),
-    createDefaultRoutineDay("tuesday", true),
-    createDefaultRoutineDay("wednesday", true),
-    createDefaultRoutineDay("thursday", true),
-    createDefaultRoutineDay("friday", true),
-    createDefaultRoutineDay("saturday", false),
-    createDefaultRoutineDay("sunday", false),
-  ],
+  days: WEEK_DAYS.map((day) => createEmptyRoutineDay(day.key)),
   createdAt: DEFAULT_TIMESTAMP,
   updatedAt: DEFAULT_TIMESTAMP,
 }

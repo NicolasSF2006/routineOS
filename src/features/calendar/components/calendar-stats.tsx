@@ -1,4 +1,11 @@
-import { Clock, Hourglass, Sparkles, Target, TrendingUp, XCircle } from "lucide-react"
+import {
+  Clock,
+  Hourglass,
+  Sparkles,
+  Target,
+  TrendingUp,
+  XCircle,
+} from "lucide-react"
 import { formatDuration } from "@/utils/date"
 import { cn } from "@/lib/utils"
 import type { MonthStats } from "@/types/study"
@@ -61,13 +68,13 @@ export function CalendarStats({ monthStats }: CalendarStatsProps) {
         return (
           <div
             key={item.key}
-            className="flex min-h-24 flex-col justify-between gap-3 rounded-xl border border-border/70 bg-card/80 p-4 shadow-sm sm:min-h-28 sm:p-5"
+            className="border-border/70 bg-card/80 flex min-h-24 flex-col justify-between gap-3 rounded-xl border p-4 shadow-sm sm:min-h-28 sm:p-5"
           >
-            <span className="flex min-w-0 items-center gap-2 text-base leading-tight text-muted-foreground">
+            <span className="text-muted-foreground flex min-w-0 items-center gap-2 text-base leading-tight">
               <Icon className={cn("size-4 shrink-0", item.tone)} />
               <span className="wrap-break-word">{item.label}</span>
             </span>
-            <span className="wrap-break-word text-xl font-semibold tracking-tight text-foreground">
+            <span className="text-foreground text-xl font-semibold tracking-tight wrap-break-word">
               {item.value}
             </span>
           </div>

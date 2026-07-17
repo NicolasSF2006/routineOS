@@ -30,11 +30,13 @@ export function StudyTimerPanel({
             : "border-primary/25 bg-primary/5",
       )}
     >
-      <div className="flex items-center justify-center gap-2 text-sm font-medium uppercase tracking-wide text-muted-foreground">
+      <div className="text-muted-foreground flex items-center justify-center gap-2 text-sm font-medium tracking-wide uppercase">
         <span
           className={cn(
             "size-2 rounded-full",
-            isRunning ? "animate-pulse bg-status-correto" : "bg-muted-foreground/50",
+            isRunning
+              ? "bg-status-correto animate-pulse"
+              : "bg-muted-foreground/50",
           )}
         />
         {controlState === "pausado"
@@ -43,21 +45,23 @@ export function StudyTimerPanel({
             ? "Aguardando próxima etapa"
             : controlState === "cancelado"
               ? "Cancelado"
-          : controlState === "concluido"
-            ? "Finalizado"
-            : "Tempo ativo estudado"}
+              : controlState === "concluido"
+                ? "Finalizado"
+                : "Tempo ativo estudado"}
       </div>
       <p
         className={cn(
           "mt-2 font-mono text-2xl font-semibold tabular-nums sm:text-2xl",
-          controlState === "pausado" ? "text-muted-foreground" : "text-foreground",
+          controlState === "pausado"
+            ? "text-muted-foreground"
+            : "text-foreground",
         )}
       >
         {formatClock(activeSeconds)}
       </p>
 
       <div className="mt-4">
-        <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+        <div className="bg-muted h-2 w-full overflow-hidden rounded-full">
           <div
             className={cn(
               "h-full rounded-full transition-all duration-500",
@@ -66,7 +70,7 @@ export function StudyTimerPanel({
             style={{ width: `${progress}%` }}
           />
         </div>
-        <p className="mt-2 text-sm text-muted-foreground">
+        <p className="text-muted-foreground mt-2 text-sm">
           Meta diária: {formatDuration(goalSeconds)}
         </p>
       </div>

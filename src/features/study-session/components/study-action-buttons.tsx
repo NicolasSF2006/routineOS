@@ -47,12 +47,12 @@ export function StudyActionButtons({
   const nextLabel = nextBlockIsBreak ? "Próxima pausa" : "Próxima tarefa"
 
   const autoAdvanceCheckbox = showAutoAdvance ? (
-    <Label className="mt-1 flex items-start gap-2 rounded-lg border border-border/70 bg-muted/30 px-3 py-2.5 text-sm text-foreground">
+    <Label className="border-border/70 bg-muted/30 text-foreground mt-1 flex items-start gap-2 rounded-lg border px-3 py-2.5 text-sm">
       <input
         type="checkbox"
         checked={autoAdvance}
         onChange={(event) => onAutoAdvanceChange(event.target.checked)}
-        className="mt-0.5 size-4 shrink-0 accent-primary"
+        className="accent-primary mt-0.5 size-4 shrink-0"
       />
       <span className="wrap-break-word">Avançar tarefas automaticamente</span>
     </Label>
@@ -61,14 +61,22 @@ export function StudyActionButtons({
   return (
     <div className="flex w-full max-w-full min-w-0 flex-col gap-2">
       {controlState === "inicial" ? (
-        <Button size="lg" className="min-h-11 w-full min-w-0 whitespace-normal text-center" onClick={markPresence}>
+        <Button
+          size="lg"
+          className="min-h-11 w-full min-w-0 text-center whitespace-normal"
+          onClick={markPresence}
+        >
           <Flag className="size-4" /> Marcar Presença
         </Button>
       ) : null}
 
       {controlState === "presente" ? (
         <>
-          <Button size="lg" className="min-h-11 w-full min-w-0 whitespace-normal text-center" onClick={startStudy}>
+          <Button
+            size="lg"
+            className="min-h-11 w-full min-w-0 text-center whitespace-normal"
+            onClick={startStudy}
+          >
             <Play className="size-4" /> Começar Estudos
           </Button>
           {autoAdvanceCheckbox}
@@ -77,7 +85,11 @@ export function StudyActionButtons({
 
       {controlState === "estudando" && !metaReached ? (
         <>
-          <Button size="lg" className="min-h-11 w-full min-w-0 whitespace-normal text-center" onClick={pauseStudy}>
+          <Button
+            size="lg"
+            className="min-h-11 w-full min-w-0 text-center whitespace-normal"
+            onClick={pauseStudy}
+          >
             <Pause className="size-4" /> Pausar Estudos
           </Button>
           {autoAdvanceCheckbox}
@@ -86,7 +98,11 @@ export function StudyActionButtons({
 
       {controlState === "pausado" && !metaReached ? (
         <>
-          <Button size="lg" className="min-h-11 w-full min-w-0 whitespace-normal text-center" onClick={resumeStudy}>
+          <Button
+            size="lg"
+            className="min-h-11 w-full min-w-0 text-center whitespace-normal"
+            onClick={resumeStudy}
+          >
             <Play className="size-4" /> Retomar Estudos
           </Button>
           {autoAdvanceCheckbox}
@@ -96,11 +112,15 @@ export function StudyActionButtons({
       {controlState === "aguardando" && !metaReached ? (
         <>
           {hasNextBlock ? (
-            <Button size="lg" className="min-h-11 w-full min-w-0 whitespace-normal text-center" onClick={advanceRoutineBlock}>
+            <Button
+              size="lg"
+              className="min-h-11 w-full min-w-0 text-center whitespace-normal"
+              onClick={advanceRoutineBlock}
+            >
               <SkipForward className="size-4" /> {nextLabel}
             </Button>
           ) : (
-            <div className="flex items-center justify-center rounded-xl bg-muted/60 px-4 py-3 text-sm font-medium text-muted-foreground">
+            <div className="bg-muted/60 text-muted-foreground flex items-center justify-center rounded-xl px-4 py-3 text-sm font-medium">
               Rotina do dia finalizada.
             </div>
           )}
@@ -112,28 +132,46 @@ export function StudyActionButtons({
       (controlState === "estudando" ||
         controlState === "pausado" ||
         controlState === "aguardando") ? (
-        <Button size="lg" className="min-h-11 w-full min-w-0 whitespace-normal text-center" onClick={completeStudy}>
+        <Button
+          size="lg"
+          className="min-h-11 w-full min-w-0 text-center whitespace-normal"
+          onClick={completeStudy}
+        >
           <CheckCircle2 className="size-4" /> Concluir Estudos
         </Button>
       ) : null}
 
-      {(controlState === "estudando" || controlState === "pausado" || controlState === "aguardando") && !metaReached ? (
-        <Button size="lg" variant="destructive" className="min-h-11 w-full min-w-0 whitespace-normal text-center" onClick={requestCancelDay}>
+      {(controlState === "estudando" ||
+        controlState === "pausado" ||
+        controlState === "aguardando") &&
+      !metaReached ? (
+        <Button
+          size="lg"
+          variant="destructive"
+          className="min-h-11 w-full min-w-0 text-center whitespace-normal"
+          onClick={requestCancelDay}
+        >
           <X className="size-4" /> Cancelar dia de estudo
         </Button>
       ) : null}
 
       {controlState === "cancelado" ? (
-        <Button size="lg" className="min-h-11 w-full min-w-0 whitespace-normal text-center" onClick={requestResumeCanceledDay}>
+        <Button
+          size="lg"
+          className="min-h-11 w-full min-w-0 text-center whitespace-normal"
+          onClick={requestResumeCanceledDay}
+        >
           <Play className="size-4" /> Retomar dia de estudo
         </Button>
       ) : null}
 
       {controlState === "concluido" ? (
-        <div className="flex flex-col gap-1.5 rounded-xl bg-status-correto/10 px-4 py-3 text-center text-sm">
-          <div className="flex flex-wrap items-center justify-center gap-2 font-medium text-foreground">
-            <CheckCircle2 className="size-4 text-status-correto" />
-            {completedTime ? `Dia concluído às ${completedTime}` : "Dia concluído"}
+        <div className="bg-status-correto/10 flex flex-col gap-1.5 rounded-xl px-4 py-3 text-center text-sm">
+          <div className="text-foreground flex flex-wrap items-center justify-center gap-2 font-medium">
+            <CheckCircle2 className="text-status-correto size-4" />
+            {completedTime
+              ? `Dia concluído às ${completedTime}`
+              : "Dia concluído"}
           </div>
           <span className="text-muted-foreground">Meta diária alcançada.</span>
         </div>

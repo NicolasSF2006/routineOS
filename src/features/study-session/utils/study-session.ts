@@ -26,7 +26,10 @@ import type {
 
 export const BONUS_THRESHOLD_SECONDS = 120
 
-export function getCountableBonusSeconds(activeSeconds: number, goalSeconds: number): number {
+export function getCountableBonusSeconds(
+  activeSeconds: number,
+  goalSeconds: number,
+): number {
   const extraSeconds = Math.max(0, activeSeconds - goalSeconds)
   return extraSeconds >= BONUS_THRESHOLD_SECONDS ? extraSeconds : 0
 }
@@ -73,7 +76,9 @@ export function isRoutineBreakBlock(type: RoutineBlockType): boolean {
   return type === "short-break" || type === "long-break" || type === "lunch"
 }
 
-export function getRoutineBlockDurationSeconds(block: RoutineBlock | null): number {
+export function getRoutineBlockDurationSeconds(
+  block: RoutineBlock | null,
+): number {
   return Math.max(0, (block?.durationMinutes ?? 0) * 60)
 }
 
@@ -85,23 +90,34 @@ export function getCurrentRoutineBlock(
   return routineBlocks[record.routineBlockIndex] ?? null
 }
 
-export function computeLiveActiveSeconds(record: DailyStudyRecord, nowMs: number): number {
+export function computeLiveActiveSeconds(
+  record: DailyStudyRecord,
+  nowMs: number,
+): number {
   let total = record.activeSeconds
   if (record.activeSegmentStartedAt && record.status === "in-progress") {
     total += Math.max(
       0,
-      Math.floor((nowMs - new Date(record.activeSegmentStartedAt).getTime()) / 1000),
+      Math.floor(
+        (nowMs - new Date(record.activeSegmentStartedAt).getTime()) / 1000,
+      ),
     )
   }
   return total
 }
 
-export function computeLiveRoutineBreakSeconds(record: DailyStudyRecord, nowMs: number): number {
+export function computeLiveRoutineBreakSeconds(
+  record: DailyStudyRecord,
+  nowMs: number,
+): number {
   let total = record.routineBreakSeconds
   if (record.routineBreakSegmentStartedAt && record.status === "in-progress") {
     total += Math.max(
       0,
-      Math.floor((nowMs - new Date(record.routineBreakSegmentStartedAt).getTime()) / 1000),
+      Math.floor(
+        (nowMs - new Date(record.routineBreakSegmentStartedAt).getTime()) /
+          1000,
+      ),
     )
   }
   return total
@@ -120,17 +136,26 @@ export function computeLiveRoutineBlockElapsedSeconds(
     : record.routineBreakSegmentStartedAt
 
   if (segmentStartedAt && record.status === "in-progress") {
-    elapsed += Math.max(0, Math.floor((nowMs - new Date(segmentStartedAt).getTime()) / 1000))
+    elapsed += Math.max(
+      0,
+      Math.floor((nowMs - new Date(segmentStartedAt).getTime()) / 1000),
+    )
   }
 
   return Math.min(elapsed, getRoutineBlockDurationSeconds(block))
 }
 
-export function computeLivePauseSeconds(record: DailyStudyRecord, nowMs: number): number {
+export function computeLivePauseSeconds(
+  record: DailyStudyRecord,
+  nowMs: number,
+): number {
   let total = record.pauseSeconds
   const openPause = getOpenPause(record)
   if (openPause) {
-    total += Math.max(0, Math.floor((nowMs - new Date(openPause.startedAt).getTime()) / 1000))
+    total += Math.max(
+      0,
+      Math.floor((nowMs - new Date(openPause.startedAt).getTime()) / 1000),
+    )
   }
   return total
 }
@@ -139,14 +164,17 @@ export function getDailyGoalSeconds(settings: StudySettings): number {
   return settings.dailyGoalHours * 3600
 }
 
-export function deriveControlState(record: DailyStudyRecord | null): ControlState {
+export function deriveControlState(
+  record: DailyStudyRecord | null,
+): ControlState {
   if (!record || !record.presenceAt) return "inicial"
   if (record.status === "completed") return "concluido"
   if (record.status === "canceled") return "cancelado"
   if (!record.studyStartedAt) return "presente"
   if (getOpenPause(record)) return "pausado"
   if (record.awaitingNextBlock) return "aguardando"
-  if (record.activeSegmentStartedAt || record.routineBreakSegmentStartedAt) return "estudando"
+  if (record.activeSegmentStartedAt || record.routineBreakSegmentStartedAt)
+    return "estudando"
   return "presente"
 }
 
@@ -173,7 +201,8 @@ export function deriveDayStatus(
   routine: Routine = DEFAULT_ROUTINE,
 ): DayStatus {
   const officialStartTime = getOfficialStartTime(dateKey, routine)
-  if (!hasRoutineForDateKey(routine, dateKey) || !officialStartTime) return "sem-rotina"
+  if (!hasRoutineForDateKey(routine, dateKey) || !officialStartTime)
+    return "sem-rotina"
 
   const today = getTodayDateKey()
 
@@ -183,7 +212,13 @@ export function deriveDayStatus(
     return "rotina-prevista"
   }
 
-  if (record.status === "completed" && getCountableBonusSeconds(record.activeSeconds, getDailyGoalSeconds(settings)) > 0) {
+  if (
+    record.status === "completed" &&
+    getCountableBonusSeconds(
+      record.activeSeconds,
+      getDailyGoalSeconds(settings),
+    ) > 0
+  ) {
     return "acima-meta"
   }
 
@@ -282,7 +317,10 @@ export function buildDayDetail(
     const endMs = pause.endedAt ? new Date(pause.endedAt).getTime() : nowMs
     const duration = pause.endedAt
       ? pause.durationSeconds
-      : Math.max(0, Math.floor((endMs - new Date(pause.startedAt).getTime()) / 1000))
+      : Math.max(
+          0,
+          Math.floor((endMs - new Date(pause.startedAt).getTime()) / 1000),
+        )
 
     return {
       start: formatTime(pause.startedAt),
@@ -302,9 +340,18 @@ export function buildDayDetail(
     paused: pauseSeconds > 0 ? formatDuration(pauseSeconds) : null,
     breaks: record.pauses.length,
     pauseList,
-    bonus: getCountableBonusSeconds(record.activeSeconds, getDailyGoalSeconds(settings)) > 0
-      ? formatDuration(getCountableBonusSeconds(record.activeSeconds, getDailyGoalSeconds(settings)))
-      : null,
+    bonus:
+      getCountableBonusSeconds(
+        record.activeSeconds,
+        getDailyGoalSeconds(settings),
+      ) > 0
+        ? formatDuration(
+            getCountableBonusSeconds(
+              record.activeSeconds,
+              getDailyGoalSeconds(settings),
+            ),
+          )
+        : null,
     canceledAt: record.canceledAt ? formatTime(record.canceledAt) : null,
     resumedAt: record.resumedAt ? formatTime(record.resumedAt) : null,
   }
@@ -331,7 +378,10 @@ export function computeMonthStats(
 
     if (record?.status === "completed") {
       studiedSeconds += record.activeSeconds
-      bonusSeconds += getCountableBonusSeconds(record.activeSeconds, getDailyGoalSeconds(settings))
+      bonusSeconds += getCountableBonusSeconds(
+        record.activeSeconds,
+        getDailyGoalSeconds(settings),
+      )
       completedDays += 1
     }
 
@@ -361,7 +411,9 @@ export function finalizeActiveSegment(
 
   const segmentSeconds = Math.max(
     0,
-    Math.floor((nowMs - new Date(record.activeSegmentStartedAt).getTime()) / 1000),
+    Math.floor(
+      (nowMs - new Date(record.activeSegmentStartedAt).getTime()) / 1000,
+    ),
   )
 
   return {
@@ -393,7 +445,9 @@ export function startCurrentRoutineSegment(
   return {
     ...record,
     activeSegmentStartedAt: isActiveStudyBlock(block.type) ? startedAt : null,
-    routineBreakSegmentStartedAt: isRoutineBreakBlock(block.type) ? startedAt : null,
+    routineBreakSegmentStartedAt: isRoutineBreakBlock(block.type)
+      ? startedAt
+      : null,
     awaitingNextBlock: false,
     updatedAt: nowIso(),
   }
@@ -407,7 +461,11 @@ export function finalizeCurrentRoutineSegment(
   const block = routineBlocks[record.routineBlockIndex] ?? null
   if (!block) {
     return finalizeActiveSegment(
-      { ...record, routineBreakSegmentStartedAt: null, routineBlockElapsedSeconds: 0 },
+      {
+        ...record,
+        routineBreakSegmentStartedAt: null,
+        routineBlockElapsedSeconds: 0,
+      },
       nowMs,
     )
   }
@@ -431,11 +489,14 @@ export function finalizeCurrentRoutineSegment(
 
   return {
     ...record,
-    activeSeconds: isStudy ? record.activeSeconds + countedSeconds : record.activeSeconds,
+    activeSeconds: isStudy
+      ? record.activeSeconds + countedSeconds
+      : record.activeSeconds,
     routineBreakSeconds: isStudy
       ? record.routineBreakSeconds
       : record.routineBreakSeconds + countedSeconds,
-    routineBlockElapsedSeconds: record.routineBlockElapsedSeconds + countedSeconds,
+    routineBlockElapsedSeconds:
+      record.routineBlockElapsedSeconds + countedSeconds,
     activeSegmentStartedAt: null,
     routineBreakSegmentStartedAt: null,
     updatedAt: nowIso(),
@@ -494,7 +555,11 @@ export function advanceToNextRoutineBlock(
     updatedAt: nowIso(),
   }
 
-  return startCurrentRoutineSegment(nextRecord, routineBlocks, new Date(nowMs).toISOString())
+  return startCurrentRoutineSegment(
+    nextRecord,
+    routineBlocks,
+    new Date(nowMs).toISOString(),
+  )
 }
 
 export function finalizeOpenPause(

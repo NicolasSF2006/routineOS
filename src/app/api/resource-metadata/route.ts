@@ -1,7 +1,18 @@
-import { NextRequest, NextResponse } from "next/server"
+import { lookup } from "node:dns/promises"
+import { isIP } from "node:net"
+import { NextResponse } from "next/server"
+import { readJsonBody } from "@/server/http/read-json-body"
+import {
+  checkRateLimit,
+  getRequestClientKey,
+} from "@/server/security/rate-limit"
 
-const MAX_HTML_CHARS = 250_000
-const FETCH_TIMEOUT_MS = 5000
+const MAX_REQUEST_BYTES = 4_096
+const MAX_HTML_BYTES = 250_000
+const FETCH_TIMEOUT_MS = 5_000
+const MAX_REDIRECTS = 3
+const RATE_LIMIT_REQUESTS = 10
+const RATE_LIMIT_WINDOW_MS = 60_000
 
 function decodeHtmlEntities(value: string): string {
   return value
@@ -15,29 +26,59 @@ function decodeHtmlEntities(value: string): string {
     .trim()
 }
 
-function isBlockedHostname(hostname: string): boolean {
-  const normalized = hostname.toLowerCase()
-
-  if (
-    normalized === "localhost" ||
-    normalized === "0.0.0.0" ||
-    normalized === "::1" ||
-    normalized.endsWith(".local")
-  ) {
+function isPrivateIpv4(address: string): boolean {
+  const parts = address.split(".").map(Number)
+  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part)))
     return true
+  const [first, second] = parts
+
+  return (
+    first === 0 ||
+    first === 10 ||
+    first === 127 ||
+    (first === 100 && second >= 64 && second <= 127) ||
+    (first === 169 && second === 254) ||
+    (first === 172 && second >= 16 && second <= 31) ||
+    (first === 192 && second === 0) ||
+    (first === 192 && second === 168) ||
+    (first === 198 && (second === 18 || second === 19)) ||
+    first >= 224
+  )
+}
+
+export function isPrivateIpAddress(address: string): boolean {
+  const normalized = address.toLowerCase().split("%")[0]
+  const version = isIP(normalized)
+  if (version === 4) return isPrivateIpv4(normalized)
+  if (version !== 6) return true
+
+  if (normalized.startsWith("::ffff:")) {
+    return isPrivateIpv4(normalized.slice("::ffff:".length))
   }
 
-  if (/^127\./.test(normalized)) return true
-  if (/^10\./.test(normalized)) return true
-  if (/^192\.168\./.test(normalized)) return true
+  return (
+    normalized === "::" ||
+    normalized === "::1" ||
+    normalized.startsWith("fc") ||
+    normalized.startsWith("fd") ||
+    /^fe[89ab]/.test(normalized) ||
+    normalized.startsWith("2001:db8:")
+  )
+}
 
-  const private172Match = normalized.match(/^172\.(\d+)\./)
-  if (private172Match) {
-    const secondOctet = Number(private172Match[1])
-    if (secondOctet >= 16 && secondOctet <= 31) return true
+async function assertPublicUrl(url: URL): Promise<void> {
+  const hostname = url.hostname.toLowerCase()
+  if (hostname === "localhost" || hostname.endsWith(".local")) {
+    throw new Error("URL não permitida.")
   }
 
-  return false
+  const addresses = await lookup(hostname, { all: true, verbatim: true })
+  if (
+    addresses.length === 0 ||
+    addresses.some(({ address }) => isPrivateIpAddress(address))
+  ) {
+    throw new Error("URL não permitida.")
+  }
 }
 
 function extractMetaContent(html: string, name: string): string | null {
@@ -55,53 +96,145 @@ function extractTitle(html: string): string | null {
   if (!match?.[1]) return null
   const title = decodeHtmlEntities(match[1])
   if (!title) return null
-
   const [firstPart] = title.split(/\s+[|–—-]\s+/)
   return firstPart?.trim() || title
 }
 
 function extractPlatformFromHtml(html: string): string | null {
-  const candidates = [
-    extractMetaContent(html, "og:site_name"),
-    extractMetaContent(html, "application-name"),
-    extractMetaContent(html, "apple-mobile-web-app-title"),
-    extractMetaContent(html, "twitter:app:name:iphone"),
-    extractTitle(html),
-  ]
-
-  return candidates.find((item) => item && item.length >= 2 && item.length <= 80) ?? null
+  return (
+    [
+      extractMetaContent(html, "og:site_name"),
+      extractMetaContent(html, "application-name"),
+      extractMetaContent(html, "apple-mobile-web-app-title"),
+      extractMetaContent(html, "twitter:app:name:iphone"),
+      extractTitle(html),
+    ].find((item) => item && item.length >= 2 && item.length <= 80) ?? null
+  )
 }
 
-const PLATFORM_HOSTNAME_ALIASES: Array<{ hostname: string; label: string }> = [
-  { hostname: "alura.com.br", label: "Alura" },
-  { hostname: "youtube.com", label: "YouTube" },
-  { hostname: "youtu.be", label: "YouTube" },
-  { hostname: "udemy.com", label: "Udemy" },
-  { hostname: "coursera.org", label: "Coursera" },
-  { hostname: "edx.org", label: "edX" },
-  { hostname: "rocketseat.com.br", label: "Rocketseat" },
-  { hostname: "dio.me", label: "DIO" },
-  { hostname: "freecodecamp.org", label: "freeCodeCamp" },
-  { hostname: "cursoemvideo.com", label: "Curso em Vídeo" },
-  { hostname: "web.dev", label: "web.dev" },
-  { hostname: "figma.com", label: "Figma" },
-]
+const PLATFORM_HOSTNAME_ALIASES = [
+  ["alura.com.br", "Alura"],
+  ["youtube.com", "YouTube"],
+  ["youtu.be", "YouTube"],
+  ["udemy.com", "Udemy"],
+  ["coursera.org", "Coursera"],
+  ["edx.org", "edX"],
+  ["rocketseat.com.br", "Rocketseat"],
+  ["dio.me", "DIO"],
+  ["freecodecamp.org", "freeCodeCamp"],
+  ["cursoemvideo.com", "Curso em Vídeo"],
+  ["web.dev", "web.dev"],
+  ["figma.com", "Figma"],
+] as const
 
 function getFriendlyPlatformFromHostname(hostname: string): string | null {
   const normalized = hostname.toLowerCase().replace(/^www\./, "")
-  const alias = PLATFORM_HOSTNAME_ALIASES.find(
-    (item) => normalized === item.hostname || normalized.endsWith(`.${item.hostname}`),
+  return (
+    PLATFORM_HOSTNAME_ALIASES.find(
+      ([candidate]) =>
+        normalized === candidate || normalized.endsWith(`.${candidate}`),
+    )?.[1] ?? null
   )
-
-  return alias?.label ?? null
 }
 
 function getDomainFallback(url: URL): string {
-  return getFriendlyPlatformFromHostname(url.hostname) ?? url.hostname.replace(/^www\./, "")
+  return (
+    getFriendlyPlatformFromHostname(url.hostname) ??
+    url.hostname.replace(/^www\./, "")
+  )
 }
 
-export async function POST(request: NextRequest) {
-  const body = (await request.json().catch(() => null)) as { url?: unknown } | null
+async function readLimitedText(response: Response): Promise<string> {
+  const declaredLength = Number(response.headers.get("content-length"))
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_HTML_BYTES)
+    return ""
+  if (!response.body) return ""
+
+  const reader = response.body.getReader()
+  const chunks: Uint8Array[] = []
+  let totalBytes = 0
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    totalBytes += value.byteLength
+    if (totalBytes > MAX_HTML_BYTES) {
+      await reader.cancel()
+      return ""
+    }
+    chunks.push(value)
+  }
+
+  const merged = new Uint8Array(totalBytes)
+  let offset = 0
+  for (const chunk of chunks) {
+    merged.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+  return new TextDecoder().decode(merged)
+}
+
+async function fetchPublicHtml(
+  initialUrl: URL,
+  signal: AbortSignal,
+): Promise<Response> {
+  let currentUrl = initialUrl
+
+  for (
+    let redirectCount = 0;
+    redirectCount <= MAX_REDIRECTS;
+    redirectCount += 1
+  ) {
+    await assertPublicUrl(currentUrl)
+    const response = await fetch(currentUrl, {
+      method: "GET",
+      redirect: "manual",
+      signal,
+      headers: {
+        "User-Agent": "RoutineOS metadata reader",
+        Accept: "text/html,application/xhtml+xml",
+      },
+    })
+
+    if (response.status < 300 || response.status >= 400) return response
+    const location = response.headers.get("location")
+    if (!location || redirectCount === MAX_REDIRECTS) {
+      throw new Error("Redirecionamento inválido.")
+    }
+    currentUrl = new URL(location, currentUrl)
+    if (currentUrl.protocol !== "http:" && currentUrl.protocol !== "https:") {
+      throw new Error("Redirecionamento inválido.")
+    }
+  }
+
+  throw new Error("Redirecionamentos em excesso.")
+}
+
+export async function POST(request: Request) {
+  const rateLimit = checkRateLimit({
+    key: `resource-metadata:${getRequestClientKey(request)}`,
+    limit: RATE_LIMIT_REQUESTS,
+    windowMs: RATE_LIMIT_WINDOW_MS,
+  })
+
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      {
+        error:
+          "Muitas consultas de metadados foram solicitadas. Aguarde e tente novamente.",
+      },
+      {
+        status: 429,
+        headers: { "Retry-After": String(rateLimit.retryAfterSeconds) },
+      },
+    )
+  }
+
+  const parsedBody = await readJsonBody(request, MAX_REQUEST_BYTES)
+  const body =
+    parsedBody.ok && typeof parsedBody.value === "object" && parsedBody.value
+      ? (parsedBody.value as { url?: unknown })
+      : null
   const rawUrl = typeof body?.url === "string" ? body.url.trim() : ""
 
   let parsedUrl: URL
@@ -112,11 +245,10 @@ export async function POST(request: NextRequest) {
   }
 
   if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
-    return NextResponse.json({ error: "Use uma URL com http ou https." }, { status: 400 })
-  }
-
-  if (isBlockedHostname(parsedUrl.hostname)) {
-    return NextResponse.json({ error: "URL não permitida." }, { status: 400 })
+    return NextResponse.json(
+      { error: "Use uma URL com http ou https." },
+      { status: 400 },
+    )
   }
 
   const fallback = getDomainFallback(parsedUrl)
@@ -125,28 +257,25 @@ export async function POST(request: NextRequest) {
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
 
   try {
-    const response = await fetch(parsedUrl.toString(), {
-      method: "GET",
-      redirect: "follow",
-      signal: controller.signal,
-      headers: {
-        "User-Agent": "RoutineOS metadata reader",
-        Accept: "text/html,application/xhtml+xml",
-      },
-    })
-
+    const response = await fetchPublicHtml(parsedUrl, controller.signal)
     const contentType = response.headers.get("content-type") ?? ""
     if (!response.ok || !contentType.includes("text/html")) {
       return NextResponse.json({ platform: fallback, source: "domain" })
     }
 
-    const html = (await response.text()).slice(0, MAX_HTML_CHARS)
-    const platform = extractPlatformFromHtml(html)
+    const html = await readLimitedText(response)
+    const platform = html ? extractPlatformFromHtml(html) : null
     const resolvedPlatform = hostnameAlias ?? platform ?? fallback
-    const source = hostnameAlias ? "domain-alias" : platform ? "metadata" : "domain"
-
+    const source = hostnameAlias
+      ? "domain-alias"
+      : platform
+        ? "metadata"
+        : "domain"
     return NextResponse.json({ platform: resolvedPlatform, source })
-  } catch {
+  } catch (error) {
+    if (error instanceof Error && error.message === "URL não permitida.") {
+      return NextResponse.json({ error: "URL não permitida." }, { status: 400 })
+    }
     return NextResponse.json({ platform: fallback, source: "domain" })
   } finally {
     clearTimeout(timeout)

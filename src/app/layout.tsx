@@ -1,9 +1,8 @@
-import { Analytics } from '@vercel/analytics/next'
-import type { Metadata, Viewport } from 'next'
-import { ThemeProvider } from '@/components/providers/theme-provider'
-import { StudySettingsProvider } from '@/hooks/use-study-settings'
-import '@/styles/globals.css'
-
+import { Analytics } from "@vercel/analytics/next"
+import type { Metadata, Viewport } from "next"
+import { ThemeProvider } from "@/components/providers/theme-provider"
+import { StudySettingsProvider } from "@/hooks/use-study-settings"
+import "@/styles/globals.css"
 
 export const metadata: Metadata = {
   title: {
@@ -27,10 +26,10 @@ export const metadata: Metadata = {
 }
 
 export const viewport: Viewport = {
-  colorScheme: 'light dark',
+  colorScheme: "light dark",
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#f6f8fa' },
-    { media: '(prefers-color-scheme: dark)', color: '#1a1f2b' },
+    { media: "(prefers-color-scheme: light)", color: "#f6f8fa" },
+    { media: "(prefers-color-scheme: dark)", color: "#1a1f2b" },
   ],
 }
 
@@ -45,7 +44,7 @@ export default function RootLayout({
         <ThemeProvider>
           <StudySettingsProvider>{children}</StudySettingsProvider>
         </ThemeProvider>
-        {process.env.NODE_ENV === 'production' && <Analytics />}
+        {process.env.NODE_ENV === "production" && <Analytics />}
       </body>
     </html>
   )

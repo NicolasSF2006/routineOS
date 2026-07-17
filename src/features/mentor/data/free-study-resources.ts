@@ -1,6 +1,12 @@
-import type { FreeStudyResource, StudyResourceTopicKey } from "@/features/mentor/types"
+import type {
+  FreeStudyResource,
+  StudyResourceTopicKey,
+} from "@/features/mentor/types"
 
-export const STUDY_RESOURCE_TOPIC_LABELS: Record<StudyResourceTopicKey, string> = {
+export const STUDY_RESOURCE_TOPIC_LABELS: Record<
+  StudyResourceTopicKey,
+  string
+> = {
   algorithms: "Algoritmos e lógica",
   backend: "Back-end",
   css: "CSS",
@@ -32,7 +38,8 @@ export const FREE_STUDY_RESOURCES: FreeStudyResource[] = [
     language: "pt-BR",
     level: "iniciante-intermediario",
     topics: ["javascript", "frontend"],
-    description: "Referência gratuita para fundamentos, APIs do navegador e exemplos de JavaScript.",
+    description:
+      "Referência gratuita para fundamentos, APIs do navegador e exemplos de JavaScript.",
   },
   {
     id: "mdn-html",
@@ -54,7 +61,8 @@ export const FREE_STUDY_RESOURCES: FreeStudyResource[] = [
     language: "pt-BR",
     level: "iniciante-intermediario",
     topics: ["css", "frontend"],
-    description: "Referência para layout, responsividade, seletores e propriedades CSS.",
+    description:
+      "Referência para layout, responsividade, seletores e propriedades CSS.",
   },
   {
     id: "react-docs",
@@ -65,7 +73,8 @@ export const FREE_STUDY_RESOURCES: FreeStudyResource[] = [
     language: "en",
     level: "iniciante-intermediario",
     topics: ["react", "frontend", "javascript"],
-    description: "Guia oficial para componentes, estado, props, hooks e padrões modernos de React.",
+    description:
+      "Guia oficial para componentes, estado, props, hooks e padrões modernos de React.",
   },
   {
     id: "typescript-handbook",
@@ -76,7 +85,8 @@ export const FREE_STUDY_RESOURCES: FreeStudyResource[] = [
     language: "en",
     level: "iniciante-intermediario",
     topics: ["typescript", "javascript"],
-    description: "Manual oficial para tipos, interfaces, generics e uso gradual de TypeScript.",
+    description:
+      "Manual oficial para tipos, interfaces, generics e uso gradual de TypeScript.",
   },
   {
     id: "node-docs",
@@ -87,7 +97,8 @@ export const FREE_STUDY_RESOURCES: FreeStudyResource[] = [
     language: "en",
     level: "iniciante-intermediario",
     topics: ["node", "backend", "javascript"],
-    description: "Material oficial para entender runtime, módulos, APIs e primeiros passos com Node.js.",
+    description:
+      "Material oficial para entender runtime, módulos, APIs e primeiros passos com Node.js.",
   },
   {
     id: "git-book",
@@ -98,7 +109,8 @@ export const FREE_STUDY_RESOURCES: FreeStudyResource[] = [
     language: "pt-BR",
     level: "iniciante-intermediario",
     topics: ["git"],
-    description: "Livro gratuito em português para versionamento, branches, commits e colaboração.",
+    description:
+      "Livro gratuito em português para versionamento, branches, commits e colaboração.",
   },
   {
     id: "github-skills",
@@ -109,7 +121,8 @@ export const FREE_STUDY_RESOURCES: FreeStudyResource[] = [
     language: "en",
     level: "iniciante-intermediario",
     topics: ["git"],
-    description: "Laboratórios práticos gratuitos para aprender GitHub, pull requests e automações.",
+    description:
+      "Laboratórios práticos gratuitos para aprender GitHub, pull requests e automações.",
   },
   {
     id: "ubuntu-server-docs",
@@ -120,7 +133,8 @@ export const FREE_STUDY_RESOURCES: FreeStudyResource[] = [
     language: "en",
     level: "iniciante-intermediario",
     topics: ["linux"],
-    description: "Referência gratuita para terminal, sistema, pacotes, rede e administração Linux.",
+    description:
+      "Referência gratuita para terminal, sistema, pacotes, rede e administração Linux.",
   },
   {
     id: "linux-command-line-book",
@@ -131,7 +145,8 @@ export const FREE_STUDY_RESOURCES: FreeStudyResource[] = [
     language: "en",
     level: "iniciante",
     topics: ["linux"],
-    description: "Livro gratuito para aprender comandos, shell, arquivos e automação no terminal.",
+    description:
+      "Livro gratuito para aprender comandos, shell, arquivos e automação no terminal.",
   },
   {
     id: "postgres-docs",
@@ -142,7 +157,8 @@ export const FREE_STUDY_RESOURCES: FreeStudyResource[] = [
     language: "en",
     level: "intermediario",
     topics: ["database", "sql"],
-    description: "Documentação oficial para SQL, modelagem, consultas, índices e administração PostgreSQL.",
+    description:
+      "Documentação oficial para SQL, modelagem, consultas, índices e administração PostgreSQL.",
   },
   {
     id: "sqlite-docs",
@@ -153,7 +169,8 @@ export const FREE_STUDY_RESOURCES: FreeStudyResource[] = [
     language: "en",
     level: "iniciante-intermediario",
     topics: ["database", "sql"],
-    description: "Referência para aprender SQL em banco leve, ideal para projetos pequenos e estudos.",
+    description:
+      "Referência para aprender SQL em banco leve, ideal para projetos pequenos e estudos.",
   },
   {
     id: "python-docs-ptbr",
@@ -164,7 +181,8 @@ export const FREE_STUDY_RESOURCES: FreeStudyResource[] = [
     language: "pt-BR",
     level: "iniciante-intermediario",
     topics: ["python", "backend", "algorithms"],
-    description: "Documentação oficial traduzida para sintaxe, módulos, tutoriais e biblioteca padrão.",
+    description:
+      "Documentação oficial traduzida para sintaxe, módulos, tutoriais e biblioteca padrão.",
   },
   {
     id: "freecodecamp",
@@ -174,8 +192,17 @@ export const FREE_STUDY_RESOURCES: FreeStudyResource[] = [
     provider: "freeCodeCamp",
     language: "en",
     level: "iniciante-intermediario",
-    topics: ["html", "css", "javascript", "react", "backend", "database", "python"],
-    description: "Plataforma gratuita com trilhas, exercícios e projetos práticos de programação.",
+    topics: [
+      "html",
+      "css",
+      "javascript",
+      "react",
+      "backend",
+      "database",
+      "python",
+    ],
+    description:
+      "Plataforma gratuita com trilhas, exercícios e projetos práticos de programação.",
   },
   {
     id: "curso-em-video",
@@ -186,7 +213,8 @@ export const FREE_STUDY_RESOURCES: FreeStudyResource[] = [
     language: "pt-BR",
     level: "iniciante",
     topics: ["algorithms", "html", "css", "javascript", "python", "database"],
-    description: "Cursos gratuitos em português para lógica, programação, web, banco de dados e Python.",
+    description:
+      "Cursos gratuitos em português para lógica, programação, web, banco de dados e Python.",
   },
   {
     id: "aprenda-mais-mec",
@@ -196,8 +224,16 @@ export const FREE_STUDY_RESOURCES: FreeStudyResource[] = [
     provider: "MEC",
     language: "pt-BR",
     level: "iniciante-intermediario",
-    topics: ["algorithms", "frontend", "backend", "database", "english", "portuguese"],
-    description: "Plataforma pública com cursos gratuitos em áreas técnicas e formação complementar.",
+    topics: [
+      "algorithms",
+      "frontend",
+      "backend",
+      "database",
+      "english",
+      "portuguese",
+    ],
+    description:
+      "Plataforma pública com cursos gratuitos em áreas técnicas e formação complementar.",
   },
   {
     id: "escola-virtual-gov",
@@ -208,7 +244,8 @@ export const FREE_STUDY_RESOURCES: FreeStudyResource[] = [
     language: "pt-BR",
     level: "iniciante-intermediario",
     topics: ["english", "portuguese", "ux", "database", "algorithms"],
-    description: "Cursos gratuitos para competências digitais, comunicação, gestão e formação profissional.",
+    description:
+      "Cursos gratuitos para competências digitais, comunicação, gestão e formação profissional.",
   },
   {
     id: "khan-academy-computing",
@@ -219,7 +256,8 @@ export const FREE_STUDY_RESOURCES: FreeStudyResource[] = [
     language: "pt-BR",
     level: "iniciante",
     topics: ["algorithms", "javascript"],
-    description: "Conteúdos introdutórios gratuitos para lógica, programação e fundamentos de computação.",
+    description:
+      "Conteúdos introdutórios gratuitos para lógica, programação e fundamentos de computação.",
   },
   {
     id: "roadmap-sh",
@@ -229,8 +267,18 @@ export const FREE_STUDY_RESOURCES: FreeStudyResource[] = [
     provider: "roadmap.sh",
     language: "en",
     level: "iniciante-avancado",
-    topics: ["frontend", "backend", "react", "node", "javascript", "typescript", "database", "sql"],
-    description: "Roadmaps gratuitos para visualizar ordem de estudo e tópicos de carreira técnica.",
+    topics: [
+      "frontend",
+      "backend",
+      "react",
+      "node",
+      "javascript",
+      "typescript",
+      "database",
+      "sql",
+    ],
+    description:
+      "Roadmaps gratuitos para visualizar ordem de estudo e tópicos de carreira técnica.",
   },
   {
     id: "web-dev",
@@ -241,7 +289,8 @@ export const FREE_STUDY_RESOURCES: FreeStudyResource[] = [
     language: "en",
     level: "iniciante-intermediario",
     topics: ["html", "css", "javascript", "frontend", "ux"],
-    description: "Guias gratuitos para performance, acessibilidade, HTML, CSS e boas práticas web.",
+    description:
+      "Guias gratuitos para performance, acessibilidade, HTML, CSS e boas práticas web.",
   },
   {
     id: "figma-learn",
@@ -252,7 +301,8 @@ export const FREE_STUDY_RESOURCES: FreeStudyResource[] = [
     language: "en",
     level: "iniciante",
     topics: ["ux"],
-    description: "Material gratuito para fundamentos de design, interface, prototipação e colaboração.",
+    description:
+      "Material gratuito para fundamentos de design, interface, prototipação e colaboração.",
   },
   {
     id: "duolingo-chinese",
@@ -263,7 +313,8 @@ export const FREE_STUDY_RESOURCES: FreeStudyResource[] = [
     language: "en",
     level: "iniciante",
     topics: ["mandarin"],
-    description: "Curso gratuito para praticar vocabulário e frases básicas de mandarim em lições curtas.",
+    description:
+      "Curso gratuito para praticar vocabulário e frases básicas de mandarim em lições curtas.",
   },
   {
     id: "mandarin-bean",
@@ -274,7 +325,8 @@ export const FREE_STUDY_RESOURCES: FreeStudyResource[] = [
     language: "en",
     level: "iniciante-intermediario",
     topics: ["mandarin"],
-    description: "Leituras graduadas, áudio, pinyin, exercícios de gramática e materiais por nível HSK.",
+    description:
+      "Leituras graduadas, áudio, pinyin, exercícios de gramática e materiais por nível HSK.",
   },
   {
     id: "hsk-academy-hsk1",
@@ -285,7 +337,8 @@ export const FREE_STUDY_RESOURCES: FreeStudyResource[] = [
     language: "en",
     level: "iniciante",
     topics: ["mandarin"],
-    description: "Lista de vocabulário HSK 1 com caracteres, pinyin, quiz, frases e prática.",
+    description:
+      "Lista de vocabulário HSK 1 com caracteres, pinyin, quiz, frases e prática.",
   },
   {
     id: "chinese-grammar-wiki",
@@ -296,7 +349,8 @@ export const FREE_STUDY_RESOURCES: FreeStudyResource[] = [
     language: "en",
     level: "iniciante-intermediario",
     topics: ["mandarin"],
-    description: "Referência organizada de gramática do mandarim por nível e pontos gramaticais.",
+    description:
+      "Referência organizada de gramática do mandarim por nível e pontos gramaticais.",
   },
   {
     id: "duolingo-spanish",
@@ -307,7 +361,8 @@ export const FREE_STUDY_RESOURCES: FreeStudyResource[] = [
     language: "en",
     level: "iniciante",
     topics: ["spanish"],
-    description: "Curso gratuito para praticar vocabulário e frases básicas de espanhol em lições curtas.",
+    description:
+      "Curso gratuito para praticar vocabulário e frases básicas de espanhol em lições curtas.",
   },
   {
     id: "spanishdict-learn",
@@ -318,7 +373,8 @@ export const FREE_STUDY_RESOURCES: FreeStudyResource[] = [
     language: "en",
     level: "iniciante-intermediario",
     topics: ["spanish"],
-    description: "Aulas, vocabulário, gramática e prática para estudo de espanhol.",
+    description:
+      "Aulas, vocabulário, gramática e prática para estudo de espanhol.",
   },
   {
     id: "studyspanish",
@@ -329,7 +385,8 @@ export const FREE_STUDY_RESOURCES: FreeStudyResource[] = [
     language: "en",
     level: "iniciante-intermediario",
     topics: ["spanish"],
-    description: "Material gratuito para gramática, pronúncia, vocabulário e exercícios de espanhol.",
+    description:
+      "Material gratuito para gramática, pronúncia, vocabulário e exercícios de espanhol.",
   },
 ]
 
@@ -343,7 +400,8 @@ export const FREE_STUDY_VIDEO_RESOURCES: FreeStudyResource[] = [
     language: "pt-BR",
     level: "iniciante",
     topics: ["algorithms", "python", "html", "css", "javascript", "database"],
-    description: "Canal em portugues com aulas estruturadas para fundamentos de programacao, Python, web e banco de dados.",
+    description:
+      "Canal em portugues com aulas estruturadas para fundamentos de programacao, Python, web e banco de dados.",
   },
   {
     id: "freecodecamp-youtube",
@@ -353,8 +411,19 @@ export const FREE_STUDY_VIDEO_RESOURCES: FreeStudyResource[] = [
     provider: "freeCodeCamp",
     language: "en",
     level: "iniciante-intermediario",
-    topics: ["algorithms", "python", "javascript", "react", "node", "backend", "database", "sql", "typescript"],
-    description: "Canal gratuito com cursos longos e projetos praticos de programacao, web, dados e back-end.",
+    topics: [
+      "algorithms",
+      "python",
+      "javascript",
+      "react",
+      "node",
+      "backend",
+      "database",
+      "sql",
+      "typescript",
+    ],
+    description:
+      "Canal gratuito com cursos longos e projetos praticos de programacao, web, dados e back-end.",
   },
   {
     id: "rocketseat-youtube",
@@ -364,8 +433,18 @@ export const FREE_STUDY_VIDEO_RESOURCES: FreeStudyResource[] = [
     provider: "Rocketseat",
     language: "pt-BR",
     level: "iniciante-intermediario",
-    topics: ["javascript", "typescript", "react", "node", "frontend", "backend", "html", "css"],
-    description: "Canal em portugues com aulas, lives e projetos praticos sobre desenvolvimento web moderno.",
+    topics: [
+      "javascript",
+      "typescript",
+      "react",
+      "node",
+      "frontend",
+      "backend",
+      "html",
+      "css",
+    ],
+    description:
+      "Canal em portugues com aulas, lives e projetos praticos sobre desenvolvimento web moderno.",
   },
   {
     id: "mdn-youtube",
@@ -376,7 +455,8 @@ export const FREE_STUDY_VIDEO_RESOURCES: FreeStudyResource[] = [
     language: "en",
     level: "iniciante-intermediario",
     topics: ["html", "css", "javascript", "frontend"],
-    description: "Conteudos de apoio para fundamentos da Web, APIs do navegador e boas praticas de desenvolvimento front-end.",
+    description:
+      "Conteudos de apoio para fundamentos da Web, APIs do navegador e boas praticas de desenvolvimento front-end.",
   },
   {
     id: "google-chrome-developers",
@@ -387,7 +467,8 @@ export const FREE_STUDY_VIDEO_RESOURCES: FreeStudyResource[] = [
     language: "en",
     level: "intermediario",
     topics: ["html", "css", "javascript", "frontend"],
-    description: "Canal com conteudos sobre performance, ferramentas do navegador e desenvolvimento web moderno.",
+    description:
+      "Canal com conteudos sobre performance, ferramentas do navegador e desenvolvimento web moderno.",
   },
   {
     id: "react-youtube",
@@ -398,7 +479,8 @@ export const FREE_STUDY_VIDEO_RESOURCES: FreeStudyResource[] = [
     language: "en",
     level: "intermediario",
     topics: ["react", "javascript", "frontend"],
-    description: "Canal oficial com apresentacoes, novidades e conteudos sobre o ecossistema React.",
+    description:
+      "Canal oficial com apresentacoes, novidades e conteudos sobre o ecossistema React.",
   },
   {
     id: "microsoft-developer-youtube",
@@ -409,7 +491,8 @@ export const FREE_STUDY_VIDEO_RESOURCES: FreeStudyResource[] = [
     language: "en",
     level: "iniciante-intermediario",
     topics: ["typescript", "javascript", "node", "backend"],
-    description: "Canal com aulas, demonstracoes e conteudos de desenvolvimento, incluindo JavaScript, TypeScript e cloud.",
+    description:
+      "Canal com aulas, demonstracoes e conteudos de desenvolvimento, incluindo JavaScript, TypeScript e cloud.",
   },
   {
     id: "linux-tips-youtube",
@@ -420,7 +503,8 @@ export const FREE_STUDY_VIDEO_RESOURCES: FreeStudyResource[] = [
     language: "pt-BR",
     level: "iniciante-intermediario",
     topics: ["linux", "backend"],
-    description: "Canal em portugues com conteudos sobre Linux, terminal, infraestrutura, containers e carreira tecnica.",
+    description:
+      "Canal em portugues com conteudos sobre Linux, terminal, infraestrutura, containers e carreira tecnica.",
   },
   {
     id: "diolinux-youtube",
@@ -431,7 +515,8 @@ export const FREE_STUDY_VIDEO_RESOURCES: FreeStudyResource[] = [
     language: "pt-BR",
     level: "iniciante-intermediario",
     topics: ["linux"],
-    description: "Canal em portugues com conteudos sobre Linux, sistemas operacionais, ferramentas e uso pratico no dia a dia.",
+    description:
+      "Canal em portugues com conteudos sobre Linux, sistemas operacionais, ferramentas e uso pratico no dia a dia.",
   },
   {
     id: "nngroup-youtube",
@@ -442,7 +527,8 @@ export const FREE_STUDY_VIDEO_RESOURCES: FreeStudyResource[] = [
     language: "en",
     level: "iniciante-intermediario",
     topics: ["ux"],
-    description: "Canal com explicacoes curtas sobre UX, pesquisa com usuarios, usabilidade e design de interfaces.",
+    description:
+      "Canal com explicacoes curtas sobre UX, pesquisa com usuarios, usabilidade e design de interfaces.",
   },
   {
     id: "figma-youtube",
@@ -453,7 +539,8 @@ export const FREE_STUDY_VIDEO_RESOURCES: FreeStudyResource[] = [
     language: "en",
     level: "iniciante-intermediario",
     topics: ["ux", "frontend"],
-    description: "Canal oficial com tutoriais, fluxos de trabalho e boas praticas para design de interfaces no Figma.",
+    description:
+      "Canal oficial com tutoriais, fluxos de trabalho e boas praticas para design de interfaces no Figma.",
   },
   {
     id: "bbc-learning-english-youtube",
@@ -464,7 +551,8 @@ export const FREE_STUDY_VIDEO_RESOURCES: FreeStudyResource[] = [
     language: "en",
     level: "iniciante-intermediario",
     topics: ["english"],
-    description: "Canal para praticar vocabulario, pronuncia, escuta e gramatica em ingles com aulas curtas.",
+    description:
+      "Canal para praticar vocabulario, pronuncia, escuta e gramatica em ingles com aulas curtas.",
   },
   {
     id: "english-addict-youtube",
@@ -475,7 +563,8 @@ export const FREE_STUDY_VIDEO_RESOURCES: FreeStudyResource[] = [
     language: "en",
     level: "iniciante-intermediario",
     topics: ["english"],
-    description: "Canal com aulas conversacionais para ganhar vocabulario, escuta e naturalidade em ingles.",
+    description:
+      "Canal com aulas conversacionais para ganhar vocabulario, escuta e naturalidade em ingles.",
   },
   {
     id: "chinese-zero-to-hero-youtube",
@@ -486,7 +575,8 @@ export const FREE_STUDY_VIDEO_RESOURCES: FreeStudyResource[] = [
     language: "en",
     level: "iniciante-intermediario",
     topics: ["mandarin"],
-    description: "Canal com aulas de mandarim organizadas por niveis HSK, gramatica, vocabulario e pratica guiada.",
+    description:
+      "Canal com aulas de mandarim organizadas por niveis HSK, gramatica, vocabulario e pratica guiada.",
   },
   {
     id: "yoyo-chinese-youtube",
@@ -497,7 +587,8 @@ export const FREE_STUDY_VIDEO_RESOURCES: FreeStudyResource[] = [
     language: "en",
     level: "iniciante-intermediario",
     topics: ["mandarin"],
-    description: "Canal com aulas de mandarim para iniciantes, pronuncia, pinyin, vocabulario e conversacao.",
+    description:
+      "Canal com aulas de mandarim para iniciantes, pronuncia, pinyin, vocabulario e conversacao.",
   },
   {
     id: "spanishpod101-youtube",
@@ -508,7 +599,8 @@ export const FREE_STUDY_VIDEO_RESOURCES: FreeStudyResource[] = [
     language: "en",
     level: "iniciante-intermediario",
     topics: ["spanish"],
-    description: "Canal para aprender espanhol com vocabulario, escuta, frases do dia a dia e aulas por nivel.",
+    description:
+      "Canal para aprender espanhol com vocabulario, escuta, frases do dia a dia e aulas por nivel.",
   },
   {
     id: "butterfly-spanish-youtube",
@@ -519,10 +611,13 @@ export const FREE_STUDY_VIDEO_RESOURCES: FreeStudyResource[] = [
     language: "en",
     level: "iniciante-intermediario",
     topics: ["spanish"],
-    description: "Canal com aulas de espanhol explicadas de forma didatica, focando gramatica, frases e conversacao.",
+    description:
+      "Canal com aulas de espanhol explicadas de forma didatica, focando gramatica, frases e conversacao.",
   },
 ]
 
 export const GENERAL_STUDY_RESOURCES = FREE_STUDY_RESOURCES.filter((resource) =>
-  ["freecodecamp", "curso-em-video", "aprenda-mais-mec", "roadmap-sh"].includes(resource.id),
+  ["freecodecamp", "curso-em-video", "aprenda-mais-mec", "roadmap-sh"].includes(
+    resource.id,
+  ),
 )

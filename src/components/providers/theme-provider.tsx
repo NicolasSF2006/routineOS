@@ -13,7 +13,9 @@ interface ThemeContextValue {
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined)
 
 function getSystemTheme(): Theme {
-  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
+  return window.matchMedia("(prefers-color-scheme: dark)").matches
+    ? "dark"
+    : "light"
 }
 
 function getStoredTheme(): Theme {
@@ -53,7 +55,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }, [theme])
 
   const setTheme = (next: Theme) => setThemeState(next)
-  const toggleTheme = () => setThemeState((t) => (t === "dark" ? "light" : "dark"))
+  const toggleTheme = () =>
+    setThemeState((t) => (t === "dark" ? "light" : "dark"))
 
   return (
     <ThemeContext.Provider value={{ theme, toggleTheme, setTheme }}>

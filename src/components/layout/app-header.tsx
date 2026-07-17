@@ -38,13 +38,13 @@ export function AppHeader({
   }
 
   return (
-    <header className="sticky top-0 z-40 border-b border-border/80 bg-background/85 backdrop-blur-md">
+    <header className="border-border/80 bg-background/85 sticky top-0 z-40 border-b backdrop-blur-md">
       <div className="mx-auto flex h-14 max-w-7xl items-center justify-between gap-3 px-4 sm:h-16 sm:px-6">
         <div className="flex w-16 items-center gap-2 sm:w-20 lg:w-auto lg:shrink-0">
           <button
             type="button"
             onClick={() => onNavigate("rotina")}
-            className="flex size-10 cursor-pointer items-center justify-center rounded-xl border border-primary/20 bg-primary/5 transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="border-primary/20 bg-primary/5 hover:bg-primary/10 focus-visible:ring-ring flex size-10 cursor-pointer items-center justify-center rounded-xl border transition-colors focus-visible:ring-2 focus-visible:outline-none"
             aria-label="Ir para a rotina"
           >
             <Image
@@ -57,13 +57,13 @@ export function AppHeader({
               className="size-8 object-contain"
             />
           </button>
-          <span className="hidden text-xl font-semibold leading-tight text-foreground lg:block">
+          <h1 className="text-foreground hidden text-xl leading-tight font-semibold lg:block">
             RoutineOS
-          </span>
+          </h1>
         </div>
 
         <div className="flex min-w-0 flex-1 flex-col items-center px-3 lg:hidden">
-          <h1 className="truncate text-xl font-semibold leading-tight text-foreground">
+          <h1 className="text-foreground truncate text-xl leading-tight font-semibold">
             RoutineOS
           </h1>
         </div>
@@ -83,7 +83,7 @@ export function AppHeader({
                 onClick={() => handleNavigate(item.key)}
                 aria-current={isActive ? "page" : undefined}
                 className={cn(
-                  "inline-flex min-h-10 items-center gap-2 rounded-xl px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  "focus-visible:ring-ring inline-flex min-h-10 items-center gap-2 rounded-xl px-3 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none",
                   isActive
                     ? "bg-accent text-accent-foreground"
                     : "text-muted-foreground hover:bg-muted hover:text-foreground",
@@ -100,13 +100,21 @@ export function AppHeader({
           <Sheet open={open} onOpenChange={setOpen}>
             <SheetTrigger
               render={
-                <Button variant="ghost" size="icon-lg" aria-label="Abrir menu" className="rounded-xl" />
+                <Button
+                  variant="ghost"
+                  size="icon-lg"
+                  aria-label="Abrir menu"
+                  className="rounded-xl"
+                />
               }
             >
               <Menu className="size-5" />
             </SheetTrigger>
-            <SheetContent side="right" className="w-[min(20rem,calc(100vw-1rem))] p-0">
-              <SheetHeader className="border-b border-border px-5 py-4 text-left">
+            <SheetContent
+              side="right"
+              className="w-[min(20rem,calc(100vw-1rem))] p-0"
+            >
+              <SheetHeader className="border-border border-b px-5 py-4 text-left">
                 <SheetTitle>Menu</SheetTitle>
                 <SheetDescription>Navegue entre as telas</SheetDescription>
               </SheetHeader>
@@ -130,32 +138,38 @@ export function AppHeader({
                       <span
                         className={cn(
                           "flex size-9 items-center justify-center rounded-lg",
-                          isActive ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
+                          isActive
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-muted text-muted-foreground",
                         )}
                       >
                         <Icon className="size-5" />
                       </span>
                       <span className="flex min-w-0 flex-col">
-                        <span className="text-sm font-medium">{item.label}</span>
-                        <span className="wrap-break-word text-sm text-muted-foreground">{item.description}</span>
+                        <span className="text-sm font-medium">
+                          {item.label}
+                        </span>
+                        <span className="text-muted-foreground text-sm wrap-break-word">
+                          {item.description}
+                        </span>
                       </span>
                     </button>
                   )
                 })}
 
-                <div className="my-1 h-px bg-border" aria-hidden="true" />
+                <div className="bg-border my-1 h-px" aria-hidden="true" />
 
                 <button
                   type="button"
                   onClick={handleOpenMentor}
-                  className="flex items-center gap-3 rounded-xl px-3 py-3 text-left text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="text-foreground hover:bg-muted focus-visible:ring-ring flex items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors focus-visible:ring-2 focus-visible:outline-none"
                 >
-                  <span className="flex size-9 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                  <span className="bg-muted text-muted-foreground flex size-9 items-center justify-center rounded-lg">
                     <Bot className="size-5" aria-hidden="true" />
                   </span>
                   <span className="flex min-w-0 flex-col">
                     <span className="text-sm font-medium">Mentor IA</span>
-                    <span className="wrap-break-word text-sm text-muted-foreground">
+                    <span className="text-muted-foreground text-sm wrap-break-word">
                       Abra o assistente de estudos
                     </span>
                   </span>

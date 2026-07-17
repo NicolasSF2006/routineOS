@@ -1,0 +1,50 @@
+import type { StudyTrail } from "@/features/mentor/types"
+
+export const studyTrailFixture: StudyTrail = {
+  id: "trail-e2e",
+  title: "Trilha E2E",
+  createdAt: "2026-07-14T13:00:00.000Z",
+  routineName: "Rotina E2E",
+  summary: "Plano determinístico.",
+  mentorNotes: "Siga em pequenos passos.",
+  providerMode: "mock",
+  routineSignature: "signature-e2e",
+  topics: [
+    {
+      id: "typescript",
+      title: "TypeScript",
+      description: "Tipos seguros.",
+      sourceBlocks: ["TypeScript"],
+      occurrenceCount: 2,
+      totalMinutes: 100,
+      steps: ["Ler documentação", "Praticar tipos"],
+      projectSuggestion: "Criar um parser tipado.",
+      resources: [
+        {
+          id: "ts-docs",
+          title: "TypeScript Handbook",
+          url: "https://www.typescriptlang.org/docs/",
+          type: "documentacao",
+          provider: "TypeScript",
+          language: "en",
+          level: "iniciante-avancado",
+          topics: ["typescript"],
+          description: "Documentação oficial.",
+        },
+      ],
+      videoResources: [],
+      userCourses: [],
+    },
+    {
+      id: "tema-sem-recurso",
+      title: "Tema sem catálogo",
+      description: "Tema preservado sem inventar links.",
+      sourceBlocks: ["Tema sem catálogo"],
+      steps: ["Revisar anotações"],
+      projectSuggestion: "Documentar dúvidas.",
+      resources: [],
+      videoResources: [],
+      userCourses: [],
+    },
+  ],
+}

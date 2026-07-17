@@ -25,4 +25,3 @@ export function useCalendarRecords() {
 
   return { records, nowMs }
 }
-

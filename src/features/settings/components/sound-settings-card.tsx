@@ -1,9 +1,16 @@
 "use client"
 
-import { ChangeEvent, useMemo, useRef, useState } from "react"
+import { useMemo, useRef, useState } from "react"
+import type { ChangeEvent } from "react"
 import { Music2, Upload, Volume2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -19,7 +26,12 @@ import {
   SOUND_EVENT_OPTIONS,
 } from "@/constants/settings"
 import { cn } from "@/lib/utils"
-import type { CustomSound, SoundEventKey, SoundPreference, StudySettings } from "@/types/study"
+import type {
+  CustomSound,
+  SoundEventKey,
+  SoundPreference,
+  StudySettings,
+} from "@/types/study"
 
 interface SoundSettingsCardProps {
   settings: StudySettings
@@ -50,7 +62,13 @@ function getSoundPreference(
   preferences: StudySettings["soundPreferences"],
   key: SoundEventKey,
 ): SoundPreference {
-  return preferences[key] ?? { audioId: "default", startSeconds: 0, endSeconds: null }
+  return (
+    preferences[key] ?? {
+      audioId: "default",
+      startSeconds: 0,
+      endSeconds: null,
+    }
+  )
 }
 
 const SOUND_TOGGLE_FIELDS: Record<
@@ -69,7 +87,8 @@ function getSoundEnabled(settings: StudySettings, key: SoundEventKey): boolean {
 }
 
 function playDefaultBell() {
-  const AudioCtx = window.AudioContext ?? (window as WindowWithAudioContext).webkitAudioContext
+  const AudioCtx =
+    window.AudioContext ?? (window as WindowWithAudioContext).webkitAudioContext
   if (!AudioCtx) return
 
   const context = new AudioCtx()
@@ -78,7 +97,10 @@ function playDefaultBell() {
 
   oscillator.type = "sine"
   oscillator.frequency.setValueAtTime(880, context.currentTime)
-  oscillator.frequency.exponentialRampToValueAtTime(660, context.currentTime + 0.35)
+  oscillator.frequency.exponentialRampToValueAtTime(
+    660,
+    context.currentTime + 0.35,
+  )
   gain.gain.setValueAtTime(0.001, context.currentTime)
   gain.gain.exponentialRampToValueAtTime(0.22, context.currentTime + 0.03)
   gain.gain.exponentialRampToValueAtTime(0.001, context.currentTime + 1)
@@ -94,7 +116,10 @@ function playDefaultBell() {
 function playCustomSound(sound: CustomSound, preference: SoundPreference) {
   const audio = new Audio(sound.dataUrl)
   const start = Math.max(0, preference.startSeconds || 0)
-  const end = Math.min(sound.durationSeconds, preference.endSeconds ?? sound.durationSeconds)
+  const end = Math.min(
+    sound.durationSeconds,
+    preference.endSeconds ?? sound.durationSeconds,
+  )
 
   audio.currentTime = Math.min(start, Math.max(0, sound.durationSeconds - 0.1))
   void audio.play()
@@ -114,8 +139,10 @@ function readAudioDuration(dataUrl: string): Promise<number> {
   return new Promise((resolve, reject) => {
     const audio = new Audio()
     audio.preload = "metadata"
-    audio.onloadedmetadata = () => resolve(Number.isFinite(audio.duration) ? audio.duration : 0)
-    audio.onerror = () => reject(new Error("Não foi possível ler a duração do áudio."))
+    audio.onloadedmetadata = () =>
+      resolve(Number.isFinite(audio.duration) ? audio.duration : 0)
+    audio.onerror = () =>
+      reject(new Error("Não foi possível ler a duração do áudio."))
     audio.src = dataUrl
   })
 }
@@ -124,12 +151,16 @@ function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = () => resolve(String(reader.result))
-    reader.onerror = () => reject(new Error("Não foi possível importar o arquivo."))
+    reader.onerror = () =>
+      reject(new Error("Não foi possível importar o arquivo."))
     reader.readAsDataURL(file)
   })
 }
 
-export function SoundSettingsCard({ settings, updateSettings }: SoundSettingsCardProps) {
+export function SoundSettingsCard({
+  settings,
+  updateSettings,
+}: SoundSettingsCardProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -138,7 +169,10 @@ export function SoundSettingsCard({ settings, updateSettings }: SoundSettingsCar
     return new Map(settings.customSounds.map((sound) => [sound.id, sound]))
   }, [settings.customSounds])
 
-  const updatePreference = (key: SoundEventKey, patch: Partial<SoundPreference>) => {
+  const updatePreference = (
+    key: SoundEventKey,
+    patch: Partial<SoundPreference>,
+  ) => {
     const current = getSoundPreference(settings.soundPreferences, key)
     updateSettings({
       soundPreferences: {
@@ -221,7 +255,7 @@ export function SoundSettingsCard({ settings, updateSettings }: SoundSettingsCar
           <CardHeader>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-2">
-                <span className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <span className="bg-primary/10 text-primary flex size-8 items-center justify-center rounded-lg">
                   <Volume2 className="size-4" />
                 </span>
                 <CardTitle className="text-xl">Sons</CardTitle>
@@ -236,22 +270,31 @@ export function SoundSettingsCard({ settings, updateSettings }: SoundSettingsCar
                 Editar
               </Button>
             </div>
-            <CardDescription>Áudios usados nos momentos da rotina</CardDescription>
+            <CardDescription>
+              Áudios usados nos momentos da rotina
+            </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-1 flex-col gap-3">
             {SOUND_EVENT_OPTIONS.map((option) => {
-              const preference = getSoundPreference(settings.soundPreferences, option.key)
+              const preference = getSoundPreference(
+                settings.soundPreferences,
+                option.key,
+              )
               const selectedSound = customSoundsById.get(preference.audioId)
               const name = selectedSound?.name ?? "Padrão"
 
               return (
                 <div
                   key={option.key}
-                  className="flex items-start justify-between gap-3 rounded-xl border border-border bg-muted/30 p-4 sm:items-center"
+                  className="border-border bg-muted/30 flex items-start justify-between gap-3 rounded-xl border p-4 sm:items-center"
                 >
                   <div className="flex min-w-0 flex-col gap-1">
-                    <span className="text-base font-medium text-foreground">{option.label}</span>
-                    <span className="wrap-break-word text-sm text-muted-foreground">{name}</span>
+                    <span className="text-foreground text-base font-medium">
+                      {option.label}
+                    </span>
+                    <span className="text-muted-foreground text-sm wrap-break-word">
+                      {name}
+                    </span>
                   </div>
                   <div className="flex shrink-0 items-center gap-3">
                     <Switch
@@ -263,7 +306,7 @@ export function SoundSettingsCard({ settings, updateSettings }: SoundSettingsCar
                       }
                       aria-label={`Ativar ${option.label}`}
                     />
-                    <Music2 className="size-5 shrink-0 text-muted-foreground" />
+                    <Music2 className="text-muted-foreground size-5 shrink-0" />
                   </div>
                 </div>
               )
@@ -271,11 +314,11 @@ export function SoundSettingsCard({ settings, updateSettings }: SoundSettingsCar
           </CardContent>
         </Card>
 
-        <Card className="absolute inset-0 flex flex-col overflow-hidden [backface-visibility:hidden] [transform:rotateY(180deg)]">
+        <Card className="absolute inset-0 flex [transform:rotateY(180deg)] flex-col overflow-hidden [backface-visibility:hidden]">
           <CardHeader>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-2">
-                <span className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <span className="bg-primary/10 text-primary flex size-8 items-center justify-center rounded-lg">
                   <Volume2 className="size-4" />
                 </span>
                 <CardTitle className="text-xl">Editar sons</CardTitle>
@@ -290,25 +333,36 @@ export function SoundSettingsCard({ settings, updateSettings }: SoundSettingsCar
                 Voltar
               </Button>
             </div>
-            <CardDescription>Escolha áudios importados ou use o sino padrão</CardDescription>
+            <CardDescription>
+              Escolha áudios importados ou use o sino padrão
+            </CardDescription>
           </CardHeader>
           <CardContent className="min-h-0 flex-1 overflow-y-auto pb-6">
             <div className="flex flex-col gap-4">
               {SOUND_EVENT_OPTIONS.map((option) => {
-                const preference = getSoundPreference(settings.soundPreferences, option.key)
+                const preference = getSoundPreference(
+                  settings.soundPreferences,
+                  option.key,
+                )
                 const selectedSound = customSoundsById.get(preference.audioId)
                 const isLongAudio = Boolean(
-                  selectedSound && selectedSound.durationSeconds > LONG_AUDIO_THRESHOLD_SECONDS,
+                  selectedSound &&
+                  selectedSound.durationSeconds > LONG_AUDIO_THRESHOLD_SECONDS,
                 )
                 const maxEnd = selectedSound?.durationSeconds ?? 0
                 const endValue = preference.endSeconds ?? maxEnd
 
                 return (
-                  <div key={option.key} className="rounded-xl border border-border bg-muted/20 p-4">
+                  <div
+                    key={option.key}
+                    className="border-border bg-muted/20 rounded-xl border p-4"
+                  >
                     <div className="flex flex-col gap-3">
                       <div className="flex min-w-0 flex-col gap-1">
-                        <Label className="text-base font-medium text-foreground">{option.label}</Label>
-                        <span className="wrap-break-word text-sm text-muted-foreground">
+                        <Label className="text-foreground text-base font-medium">
+                          {option.label}
+                        </Label>
+                        <span className="text-muted-foreground text-sm wrap-break-word">
                           {option.description}
                         </span>
                       </div>
@@ -316,13 +370,18 @@ export function SoundSettingsCard({ settings, updateSettings }: SoundSettingsCar
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                         <Select
                           value={preference.audioId}
-                          onValueChange={(value) => handleSelectAudio(option.key, value ?? "default")}
+                          onValueChange={(value) =>
+                            handleSelectAudio(option.key, value ?? "default")
+                          }
                         >
-                          <SelectTrigger className="min-h-10 w-full text-base sm:flex-1">
-                            <span className="wrap-break-word text-left">
+                          <SelectTrigger
+                            className="min-h-10 w-full text-base sm:flex-1"
+                            aria-label={`Som para ${option.label}`}
+                          >
+                            <span className="text-left wrap-break-word">
                               {preference.audioId === "default"
                                 ? "Padrão"
-                                : selectedSound?.name ?? "Padrão"}
+                                : (selectedSound?.name ?? "Padrão")}
                             </span>
                           </SelectTrigger>
                           <SelectContent>
@@ -346,9 +405,12 @@ export function SoundSettingsCard({ settings, updateSettings }: SoundSettingsCar
                       </div>
 
                       {isLongAudio && selectedSound ? (
-                        <div className="grid gap-3 rounded-lg bg-background/60 p-3 transition-all duration-300 sm:grid-cols-2">
+                        <div className="bg-background/60 grid gap-3 rounded-lg p-3 transition-all duration-300 sm:grid-cols-2">
                           <div className="flex flex-col gap-1.5">
-                            <Label htmlFor={`${option.key}-start`} className="text-sm">
+                            <Label
+                              htmlFor={`${option.key}-start`}
+                              className="text-sm"
+                            >
                               Iniciar áudio em
                             </Label>
                             <Input
@@ -359,16 +421,25 @@ export function SoundSettingsCard({ settings, updateSettings }: SoundSettingsCar
                               step={0.5}
                               value={preference.startSeconds}
                               onChange={(event) => {
-                                const startSeconds = Math.max(0, Number(event.target.value) || 0)
+                                const startSeconds = Math.max(
+                                  0,
+                                  Number(event.target.value) || 0,
+                                )
                                 updatePreference(option.key, {
                                   startSeconds,
-                                  endSeconds: Math.max(startSeconds + 0.5, endValue),
+                                  endSeconds: Math.max(
+                                    startSeconds + 0.5,
+                                    endValue,
+                                  ),
                                 })
                               }}
                             />
                           </div>
                           <div className="flex flex-col gap-1.5">
-                            <Label htmlFor={`${option.key}-end`} className="text-sm">
+                            <Label
+                              htmlFor={`${option.key}-end`}
+                              className="text-sm"
+                            >
                               Finalizar áudio em
                             </Label>
                             <Input
@@ -389,8 +460,9 @@ export function SoundSettingsCard({ settings, updateSettings }: SoundSettingsCar
                                 updatePreference(option.key, { endSeconds })
                               }}
                             />
-                            <span className="text-sm text-muted-foreground">
-                              Duração: {formatDuration(selectedSound.durationSeconds)}
+                            <span className="text-muted-foreground text-sm">
+                              Duração:{" "}
+                              {formatDuration(selectedSound.durationSeconds)}
                             </span>
                           </div>
                         </div>
@@ -400,7 +472,11 @@ export function SoundSettingsCard({ settings, updateSettings }: SoundSettingsCar
                 )
               })}
 
-              {message ? <p className="text-center text-sm text-muted-foreground">{message}</p> : null}
+              {message ? (
+                <p className="text-muted-foreground text-center text-sm">
+                  {message}
+                </p>
+              ) : null}
 
               <input
                 ref={fileInputRef}
@@ -419,8 +495,9 @@ export function SoundSettingsCard({ settings, updateSettings }: SoundSettingsCar
                   <Upload className="mr-2 size-4" />
                   Importar áudio
                 </Button>
-                <span className="text-sm text-muted-foreground">
-                  Limite de {formatFileSize(MAX_CUSTOM_SOUND_SIZE_BYTES)} por arquivo.
+                <span className="text-muted-foreground text-sm">
+                  Limite de {formatFileSize(MAX_CUSTOM_SOUND_SIZE_BYTES)} por
+                  arquivo.
                 </span>
               </div>
             </div>

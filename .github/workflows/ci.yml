@@ -1,0 +1,85 @@
+name: Qualidade
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      executar_visuais:
+        description: "Executar regressão visual com os baselines oficiais do Linux"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  qualidade:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # npm ci valida a coerência entre package.json e package-lock.json.
+      - run: npm run format:check
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run test
+      - run: npm run test:coverage
+      - run: npm run build
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cobertura-unitaria
+          path: coverage/
+          if-no-files-found: ignore
+
+  navegador:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - run: npm run test:a11y
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: falhas-playwright
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+
+  visual:
+    if: github.event_name == 'workflow_dispatch' && inputs.executar_visuais
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:visual
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: diferencas-visuais
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore

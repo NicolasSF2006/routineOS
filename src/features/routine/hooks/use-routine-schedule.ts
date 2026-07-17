@@ -5,19 +5,27 @@ import {
   getCurrentWeekDays,
   getCurrentRoutineBlockIndex,
 } from "@/features/routine/utils/routine-schedule"
-import { getRoutineDayBlocksForDateKey, getWeekdayFromDateKey } from "@/features/routine/utils/routine-domain"
+import {
+  getRoutineDayBlocksForDateKey,
+  getWeekdayFromDateKey,
+} from "@/features/routine/utils/routine-domain"
 import { useRoutine } from "@/features/routine/hooks/use-routine"
-import { getTodayDateKey, parseDateKey, toDateKey } from "@/utils/date"
+import {
+  getCurrentDate,
+  getTodayDateKey,
+  parseDateKey,
+  toDateKey,
+} from "@/utils/date"
 
 export function useRoutineSchedule() {
-  const { routine, isLoading } = useRoutine()
+  const { routine, isLoading, hasCustomRoutine } = useRoutine()
   const [nowMinutes, setNowMinutes] = useState<number | null>(null)
   const [activeDateKey, setActiveDateKey] = useState(() => getTodayDateKey())
   const [weekOffset, setWeekOffset] = useState(0)
 
   useEffect(() => {
     const update = () => {
-      const date = new Date()
+      const date = getCurrentDate()
       setNowMinutes(date.getHours() * 60 + date.getMinutes())
     }
 
@@ -27,7 +35,7 @@ export function useRoutineSchedule() {
   }, [])
 
   const currentWeekDays = useMemo(() => {
-    const baseDate = new Date()
+    const baseDate = getCurrentDate()
     baseDate.setDate(baseDate.getDate() + weekOffset * 7)
     return getCurrentWeekDays(baseDate)
   }, [weekOffset])
@@ -62,6 +70,7 @@ export function useRoutineSchedule() {
   return {
     routine,
     isLoading,
+    hasCustomRoutine,
     activeDateKey,
     setActiveDateKey,
     activeDay,
@@ -72,6 +81,8 @@ export function useRoutineSchedule() {
     goToNextWeek,
     goToCurrentWeek,
     activeBlocks,
-    currentBlockIndex: isSelectedToday ? getCurrentRoutineBlockIndex(nowMinutes, activeBlocks) : -1,
+    currentBlockIndex: isSelectedToday
+      ? getCurrentRoutineBlockIndex(nowMinutes, activeBlocks)
+      : -1,
   }
 }

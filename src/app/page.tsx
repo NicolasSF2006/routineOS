@@ -13,7 +13,13 @@ import { OnboardingDialog } from "@/features/onboarding/components/onboarding-di
 import { completeOnboarding, hasCompletedOnboarding } from "@/lib/storage"
 import type { ViewKey } from "@/types/navigation"
 
-const VIEW_KEYS: ViewKey[] = ["rotina", "calendario", "trilhas", "configuracoes", "configurar-rotina"]
+const VIEW_KEYS: ViewKey[] = [
+  "rotina",
+  "calendario",
+  "trilhas",
+  "configuracoes",
+  "configurar-rotina",
+]
 
 function isViewKey(value: string | null): value is ViewKey {
   return value !== null && VIEW_KEYS.includes(value as ViewKey)
@@ -42,7 +48,11 @@ export default function Page() {
     }
 
     window.addEventListener(STORAGE_EVENTS.appDataChanged, handleAppDataChanged)
-    return () => window.removeEventListener(STORAGE_EVENTS.appDataChanged, handleAppDataChanged)
+    return () =>
+      window.removeEventListener(
+        STORAGE_EVENTS.appDataChanged,
+        handleAppDataChanged,
+      )
   }, [])
 
   const handleCompleteOnboarding = () => {
@@ -56,7 +66,7 @@ export default function Page() {
   }
 
   return (
-    <div className="min-h-svh overflow-x-hidden bg-background">
+    <div className="bg-background min-h-svh overflow-x-hidden">
       <AppHeader
         activeView={view}
         onNavigate={navigateToView}
@@ -73,7 +83,10 @@ export default function Page() {
         {view === "calendario" ? <CalendarioView /> : null}
         {view === "trilhas" ? <TrailsView /> : null}
         {view === "configuracoes" ? (
-          <SettingsView onNavigate={navigateToView} onOpenOnboarding={() => setIsOnboardingOpen(true)} />
+          <SettingsView
+            onNavigate={navigateToView}
+            onOpenOnboarding={() => setIsOnboardingOpen(true)}
+          />
         ) : null}
         {view === "configurar-rotina" ? (
           <RoutineBuilderView
@@ -82,11 +95,16 @@ export default function Page() {
           />
         ) : null}
       </main>
-      <OnboardingDialog open={isOnboardingOpen} onComplete={handleCompleteOnboarding} />
+      <OnboardingDialog
+        open={isOnboardingOpen}
+        onComplete={handleCompleteOnboarding}
+      />
       <MentorWidget
         currentView={view}
         isOpen={isMentorOpen}
+        onOpen={() => setIsMentorOpen(true)}
         onClose={() => setIsMentorOpen(false)}
+        onNavigate={navigateToView}
       />
     </div>
   )

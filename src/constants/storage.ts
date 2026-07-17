@@ -7,6 +7,7 @@ export const STORAGE_KEYS = {
   onboardingCompleted: "routineos-onboarding-completed",
   mentorChat: "routineos-mentor-chat",
   mentorTrails: "routineos-mentor-trails",
+  mentorRoutineDraft: "routineos-mentor-routine-draft",
 } as const
 
 export const STORAGE_EVENTS = {
@@ -17,6 +18,7 @@ export const STORAGE_EVENTS = {
   appDataChanged: "routineos-app-data-changed",
   mentorChatChanged: "routineos-mentor-chat-changed",
   mentorTrailsChanged: "routineos-mentor-trails-changed",
+  mentorRoutineDraftChanged: "routineos-mentor-routine-draft-changed",
 } as const
 
-export const BACKUP_SCHEMA_VERSION = 3
+export const BACKUP_SCHEMA_VERSION = 4
