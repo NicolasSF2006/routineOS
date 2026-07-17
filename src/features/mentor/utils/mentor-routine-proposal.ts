@@ -173,6 +173,149 @@ export function isRoutineAdjustmentRequest(message: string): boolean {
   )
 }
 
+interface ExactRoutineScheduleSlot {
+  type: MentorRoutineProposalBlock["type"]
+  startTime: string
+  durationMinutes: number
+}
+
+function inferExactScheduleSlotType(
+  label: string,
+  durationMinutes: number,
+): MentorRoutineProposalBlock["type"] | null {
+  const normalized = normalizeComparableText(label)
+
+  if (normalized.includes("almoco")) return "lunch"
+  if (normalized.includes("projeto")) return "project"
+  if (normalized.includes("estudo")) return "study"
+
+  if (normalized.includes("pausa")) {
+    if (normalized.includes("curta")) return "short-break"
+    if (normalized.includes("longa")) return "long-break"
+    return durationMinutes <= 5 ? "short-break" : "long-break"
+  }
+
+  return null
+}
+
+function parseExactRoutineSchedule(
+  message: string,
+): ExactRoutineScheduleSlot[] | null {
+  const linePattern =
+    /^\s*(\d{1,2}:\d{2})\s*[–-]\s*(\d{1,2}:\d{2})\s*[—–-]\s*(.+?)\s*$/gm
+  const slots: ExactRoutineScheduleSlot[] = []
+  let previousEndMinutes: number | null = null
+
+  for (const match of message.matchAll(linePattern)) {
+    const startParts = match[1].split(":").map(Number)
+    const endParts = match[2].split(":").map(Number)
+    const startMinutes = startParts[0] * 60 + startParts[1]
+    const endMinutes = endParts[0] * 60 + endParts[1]
+
+    if (
+      startParts[0] > 23 ||
+      endParts[0] > 23 ||
+      startParts[1] > 59 ||
+      endParts[1] > 59 ||
+      endMinutes <= startMinutes ||
+      (previousEndMinutes !== null && startMinutes !== previousEndMinutes)
+    ) {
+      return null
+    }
+
+    const durationMinutes = endMinutes - startMinutes
+    const type = inferExactScheduleSlotType(match[3], durationMinutes)
+    if (!type) return null
+
+    slots.push({
+      type,
+      startTime: formatTime(startMinutes),
+      durationMinutes,
+    })
+    previousEndMinutes = endMinutes
+  }
+
+  return slots.length >= 2 ? slots : null
+}
+
+function takeCompatibleBlock(
+  blocks: MentorRoutineProposalBlock[],
+  usedIndexes: Set<number>,
+  requestedType: MentorRoutineProposalBlock["type"],
+): MentorRoutineProposalBlock | null {
+  const compatibleTypes =
+    requestedType === "short-break" || requestedType === "long-break"
+      ? new Set(["short-break", "long-break"])
+      : new Set([requestedType])
+
+  const index = blocks.findIndex(
+    (block, blockIndex) =>
+      !usedIndexes.has(blockIndex) && compatibleTypes.has(block.type),
+  )
+  if (index < 0) return null
+
+  usedIndexes.add(index)
+  return blocks[index]
+}
+
+export function applyExactRoutineScheduleAdjustment(
+  message: string,
+  proposal: MentorRoutineProposal,
+): MentorRoutineProposal | null {
+  const slots = parseExactRoutineSchedule(message)
+  if (!slots) return null
+
+  const availabilityStartTime = slots[0].startTime
+  const lastSlot = slots[slots.length - 1]
+  const lastStartMinutes = timeToMinutes(lastSlot.startTime)
+  if (lastStartMinutes === null) return null
+  const availabilityEndTime = formatTime(
+    lastStartMinutes + lastSlot.durationMinutes,
+  )
+
+  const adjustedSchedules = proposal.schedules.map((schedule) => {
+    const usedIndexes = new Set<number>()
+    const blocks = slots.map((slot) => {
+      const currentBlock = takeCompatibleBlock(
+        schedule.blocks,
+        usedIndexes,
+        slot.type,
+      )
+      if (!currentBlock) return null
+
+      return {
+        ...currentBlock,
+        type: slot.type,
+        startTime: slot.startTime,
+        durationMinutes: slot.durationMinutes,
+      }
+    })
+
+    if (
+      blocks.some((block) => block === null) ||
+      usedIndexes.size !== schedule.blocks.length
+    ) {
+      return null
+    }
+
+    return {
+      ...schedule,
+      availabilityStartTime,
+      availabilityEndTime,
+      blocks: blocks as MentorRoutineProposalBlock[],
+    }
+  })
+
+  if (adjustedSchedules.some((schedule) => schedule === null)) return null
+
+  return normalizeMentorRoutineProposal({
+    ...proposal,
+    method: "custom",
+    pomodoro: undefined,
+    schedules: adjustedSchedules,
+  })
+}
+
 export function hasUnstructuredRoutineSuggestion(
   history: MentorMessage[],
 ): boolean {

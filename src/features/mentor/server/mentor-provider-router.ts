@@ -5,6 +5,7 @@ import { parseMentorProviderResponse } from "@/features/mentor/server/mentor-res
 import { recordMentorEvent } from "@/features/mentor/server/mentor-observability"
 import { readMentorEnvironment } from "@/features/mentor/server/mentor-environment"
 import {
+  applyExactRoutineScheduleAdjustment,
   formatMentorRoutineProposalPreview,
   findLatestRoutinePreview,
   hasUnstructuredRoutineSuggestion,
@@ -355,6 +356,24 @@ export async function createMentorReply(
         type: "propose-routine",
         routine: latestPreview,
       },
+    }
+  }
+
+  if (latestPreview && isAdjustmentRequest) {
+    const locallyAdjustedPreview = applyExactRoutineScheduleAdjustment(
+      request.message,
+      latestPreview,
+    )
+
+    if (locallyAdjustedPreview) {
+      return {
+        reply: formatMentorRoutineProposalPreview(locallyAdjustedPreview),
+        mode: "mock",
+        action: {
+          type: "preview-routine",
+          routine: locallyAdjustedPreview,
+        },
+      }
     }
   }
 

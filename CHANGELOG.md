@@ -122,3 +122,5 @@
 - exigida uma `preview-routine` válida quando o usuário pede a criação de uma rotina, evitando que tabelas em texto livre sejam tratadas como propostas aplicáveis;
 - adicionadas confirmações curtas como “sim”, “por favor” e “então crie” para reutilizar a última prévia estruturada sem nova chamada ao provedor;
 - adicionado suporte ao alias `/provedor` e uma mensagem específica quando apenas o teste curto funciona, mas a geração estruturada falha.
+- adicionada aplicação local de grades horárias exatas em prévias de rotina, preservando matérias e evitando uma geração extensa pelos provedores;
+- pedidos com linhas no formato `HH:mm–HH:mm — tipo` agora recalculam início, duração e disponibilidade sem depender da IA.

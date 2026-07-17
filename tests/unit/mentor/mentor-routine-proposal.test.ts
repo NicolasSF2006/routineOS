@@ -1,5 +1,6 @@
 import { DEFAULT_ROUTINE } from "@/constants/routine"
 import {
+  applyExactRoutineScheduleAdjustment,
   createRoutineFromMentorProposal,
   hasUnstructuredRoutineSuggestion,
   isExplicitRoutineConfirmation,
@@ -193,6 +194,76 @@ describe("proposta de rotina do Mentor", () => {
       ),
     ).toBe(true)
     expect(isRoutineAdjustmentRequest("Explique o que é Node.js")).toBe(false)
+  })
+
+  it("aplica localmente uma grade horária exata preservando os conteúdos", () => {
+    const proposal = normalizeMentorRoutineProposal({
+      name: "Full Stack",
+      method: "custom",
+      summary: "Rotina semanal.",
+      schedules: [
+        {
+          weekdays: ["monday"],
+          availabilityStartTime: "10:30",
+          availabilityEndTime: "13:25",
+          blocks: [
+            { type: "study", title: "Node.js", durationMinutes: 25 },
+            { type: "short-break", durationMinutes: 5 },
+            { type: "study", title: "JavaScript", durationMinutes: 25 },
+            { type: "lunch", durationMinutes: 5 },
+            { type: "study", title: "SQL", durationMinutes: 25 },
+            { type: "long-break", durationMinutes: 5 },
+            { type: "study", title: "Git", durationMinutes: 25 },
+            { type: "short-break", durationMinutes: 5 },
+            { type: "study", title: "Inglês", durationMinutes: 25 },
+            { type: "long-break", durationMinutes: 5 },
+            { type: "project", title: "Projeto ERP Lite", durationMinutes: 25 },
+          ],
+        },
+      ],
+    })
+
+    expect(proposal).not.toBeNull()
+
+    const adjusted = applyExactRoutineScheduleAdjustment(
+      [
+        "Altere a proposta atual.",
+        "10:30–11:20 — estudo",
+        "11:20–11:25 — pausa",
+        "11:25–12:15 — estudo",
+        "12:15–13:15 — almoço",
+        "13:15–14:05 — estudo",
+        "14:05–14:20 — pausa",
+        "14:20–15:10 — estudo",
+        "15:10–15:15 — pausa",
+        "15:15–16:05 — estudo",
+        "16:05–16:20 — pausa",
+        "16:20–17:40 — projeto",
+      ].join("\n"),
+      proposal!,
+    )
+
+    expect(adjusted?.schedules[0]).toMatchObject({
+      availabilityStartTime: "10:30",
+      availabilityEndTime: "17:40",
+    })
+    expect(adjusted?.schedules[0].blocks).toEqual([
+      expect.objectContaining({ title: "Node.js", durationMinutes: 50 }),
+      expect.objectContaining({ type: "short-break", durationMinutes: 5 }),
+      expect.objectContaining({ title: "JavaScript", durationMinutes: 50 }),
+      expect.objectContaining({ type: "lunch", durationMinutes: 60 }),
+      expect.objectContaining({ title: "SQL", durationMinutes: 50 }),
+      expect.objectContaining({ type: "long-break", durationMinutes: 15 }),
+      expect.objectContaining({ title: "Git", durationMinutes: 50 }),
+      expect.objectContaining({ type: "short-break", durationMinutes: 5 }),
+      expect.objectContaining({ title: "Inglês", durationMinutes: 50 }),
+      expect.objectContaining({ type: "long-break", durationMinutes: 15 }),
+      expect.objectContaining({
+        title: "Projeto ERP Lite",
+        startTime: "16:20",
+        durationMinutes: 80,
+      }),
+    ])
   })
 
   it("identifica uma sugestão de rotina enviada sem action", () => {

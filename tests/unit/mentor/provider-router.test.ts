@@ -297,6 +297,136 @@ describe("roteamento dos provedores do Mentor", () => {
     expect(serializedMessages).not.toContain("Contexto resumido do RoutineOS")
   })
 
+  it("aplica uma grade horária exata localmente sem chamar provedores", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+    const customProposal = {
+      name: "Rotina Full Stack",
+      method: "custom" as const,
+      summary: "Rotina semanal.",
+      schedules: [
+        {
+          weekdays: ["monday" as const],
+          availabilityStartTime: "10:30",
+          availabilityEndTime: "13:25",
+          blocks: [
+            {
+              type: "study" as const,
+              title: "Node.js",
+              startTime: "10:30",
+              durationMinutes: 25,
+            },
+            {
+              type: "short-break" as const,
+              title: "Pausa curta",
+              startTime: "10:55",
+              durationMinutes: 5,
+            },
+            {
+              type: "study" as const,
+              title: "JavaScript",
+              startTime: "11:00",
+              durationMinutes: 25,
+            },
+            {
+              type: "lunch" as const,
+              title: "Almoço",
+              startTime: "11:25",
+              durationMinutes: 5,
+            },
+            {
+              type: "study" as const,
+              title: "SQL",
+              startTime: "11:30",
+              durationMinutes: 25,
+            },
+            {
+              type: "long-break" as const,
+              title: "Pausa longa",
+              startTime: "11:55",
+              durationMinutes: 5,
+            },
+            {
+              type: "study" as const,
+              title: "Git",
+              startTime: "12:00",
+              durationMinutes: 25,
+            },
+            {
+              type: "short-break" as const,
+              title: "Pausa curta",
+              startTime: "12:25",
+              durationMinutes: 5,
+            },
+            {
+              type: "study" as const,
+              title: "Inglês",
+              startTime: "12:30",
+              durationMinutes: 25,
+            },
+            {
+              type: "long-break" as const,
+              title: "Pausa longa",
+              startTime: "12:55",
+              durationMinutes: 5,
+            },
+            {
+              type: "project" as const,
+              title: "Projeto ERP Lite",
+              startTime: "13:00",
+              durationMinutes: 25,
+            },
+          ],
+        },
+      ],
+    }
+
+    const response = await createMentorReply({
+      ...request(),
+      message: [
+        "Altere a proposta atual para terminar às 17:40.",
+        "10:30–11:20 — estudo",
+        "11:20–11:25 — pausa",
+        "11:25–12:15 — estudo",
+        "12:15–13:15 — almoço",
+        "13:15–14:05 — estudo",
+        "14:05–14:20 — pausa",
+        "14:20–15:10 — estudo",
+        "15:10–15:15 — pausa",
+        "15:15–16:05 — estudo",
+        "16:05–16:20 — pausa",
+        "16:20–17:40 — projeto",
+      ].join("\n"),
+      history: [
+        {
+          id: "previa",
+          role: "assistant",
+          content: "Prévia pronta.",
+          createdAt: new Date(0).toISOString(),
+          action: {
+            type: "preview-routine",
+            routine: customProposal,
+          },
+        },
+      ],
+    })
+
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(response).toMatchObject({
+      mode: "mock",
+      action: {
+        type: "preview-routine",
+        routine: {
+          schedules: [
+            {
+              availabilityStartTime: "10:30",
+              availabilityEndTime: "17:40",
+            },
+          ],
+        },
+      },
+    })
+  })
+
   it("converte a confirmação de uma tabela antiga em nova prévia estruturada", async () => {
     process.env.GROQ_API_KEY = "chave-groq-secreta"
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
