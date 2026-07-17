@@ -3,8 +3,15 @@ export type MentorProviderErrorOptions = {
   status?: number
   retryable?: boolean
   retryAfterMs?: number
+  providerErrorCode?: string
+  providerErrorType?: string
   cause?: unknown
 }
+
+export type MentorProviderErrorDetails = Pick<
+  MentorProviderErrorOptions,
+  "providerErrorCode" | "providerErrorType"
+>
 
 const RETRYABLE_STATUS_CODES = new Set([402, 408, 409, 425, 429])
 
@@ -31,6 +38,8 @@ export class MentorProviderError extends Error {
   readonly status?: number
   readonly retryable: boolean
   readonly retryAfterMs?: number
+  readonly providerErrorCode?: string
+  readonly providerErrorType?: string
 
   constructor(message: string, options: MentorProviderErrorOptions) {
     super(message, { cause: options.cause })
@@ -39,12 +48,15 @@ export class MentorProviderError extends Error {
     this.status = options.status
     this.retryable = options.retryable ?? true
     this.retryAfterMs = options.retryAfterMs
+    this.providerErrorCode = options.providerErrorCode
+    this.providerErrorType = options.providerErrorType
   }
 }
 
 export function createProviderHttpError(
   provider: string,
   response: Response,
+  details: MentorProviderErrorDetails = {},
 ): MentorProviderError {
   return new MentorProviderError(
     `${provider} retornou HTTP ${response.status}.`,
@@ -53,6 +65,7 @@ export function createProviderHttpError(
       status: response.status,
       retryable: isRetryableProviderStatus(response.status),
       retryAfterMs: parseRetryAfterMs(response.headers.get("retry-after")),
+      ...details,
     },
   )
 }

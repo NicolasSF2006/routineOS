@@ -108,6 +108,8 @@
 - removidos placeholders sem referência e mantidas as chaves atuais de localStorage e backup.
 - corrigida a persistência de séries recorrentes, evitando que o salvamento reduzisse uma série semanal a uma única ocorrência;
 - estabilizados os testes reais de drag-and-drop, long press, bottom sheet e conclusão de sessão;
-- oficializados 51 baselines visuais Linux, 56 cenários E2E, 43 verificações de acessibilidade e 126 testes unitários/de integração;
+- oficializados 51 baselines visuais Linux, 56 cenários E2E, 43 verificações de acessibilidade e 128 testes unitários/de integração;
 - isolado o teste de acessibilidade do bottom sheet no projeto mobile e sincronizada a data do SSR com o relógio fixo do Playwright para evitar avisos falsos de hidratação;
 - adicionado fechamento por Escape, contenção e devolução de foco no modal de edição de blocos.
+- reduzido o `/provedores` a uma verificação mínima por API, sem enviar prompt completo, histórico ou contexto do usuário;
+- adicionada distinção segura entre limite temporário e ausência de cota/créditos em respostas HTTP 429 dos provedores.

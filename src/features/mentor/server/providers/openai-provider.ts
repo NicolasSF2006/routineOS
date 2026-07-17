@@ -3,12 +3,35 @@ import {
   createContextMessage,
   MAX_MENTOR_OUTPUT_TOKENS,
   MENTOR_SYSTEM_PROMPT,
+  PROVIDER_HEALTH_CHECK_OUTPUT_TOKENS,
+  PROVIDER_HEALTH_CHECK_PROMPT,
   type MentorProviderRequest,
 } from "@/features/mentor/server/mentor-prompts"
 
 export const DEFAULT_OPENAI_MODEL = "gpt-4o-mini"
 
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses"
+
+export async function checkOpenAIProviderAvailability({
+  apiKey,
+  model,
+}: {
+  apiKey: string
+  model: string
+}): Promise<void> {
+  await fetchMentorProvider("openai", OPENAI_RESPONSES_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      input: PROVIDER_HEALTH_CHECK_PROMPT,
+      max_output_tokens: PROVIDER_HEALTH_CHECK_OUTPUT_TOKENS,
+    }),
+  })
+}
 
 type OpenAIInputMessage = {
   role: "user" | "assistant"

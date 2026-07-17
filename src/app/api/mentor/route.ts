@@ -76,7 +76,7 @@ export async function POST(request: Request) {
 
   const response =
     message.toLowerCase() === "/provedores"
-      ? await createMentorProviderStatusReply(mentorRequest)
+      ? await createMentorProviderStatusReply()
       : await createMentorReply(mentorRequest)
 
   return NextResponse.json(response)

@@ -9,18 +9,22 @@ import {
   isExplicitRoutineConfirmation,
 } from "@/features/mentor/utils/mentor-routine-proposal"
 import {
+  checkGeminiProviderAvailability,
   createGeminiMentorReply,
   DEFAULT_GEMINI_MODEL,
 } from "@/features/mentor/server/providers/gemini-provider"
 import {
+  checkGroqProviderAvailability,
   createGroqMentorReply,
   DEFAULT_GROQ_MODEL,
 } from "@/features/mentor/server/providers/groq-provider"
 import {
+  checkOpenAIProviderAvailability,
   createOpenAIMentorReply,
   DEFAULT_OPENAI_MODEL,
 } from "@/features/mentor/server/providers/openai-provider"
 import {
+  checkOpenRouterProviderAvailability,
   createOpenRouterMentorReply,
   DEFAULT_OPENROUTER_MODEL,
 } from "@/features/mentor/server/providers/openrouter-provider"
@@ -38,6 +42,7 @@ type MentorProviderConfig = {
     model: string
     request: MentorProviderRequest
   }) => Promise<string>
+  checkAvailability: (args: { apiKey: string; model: string }) => Promise<void>
 }
 
 type ProviderCooldown = {
@@ -98,26 +103,64 @@ function createProviderConfigs(): Record<
       apiKey: environment.providers.gemini.apiKey,
       model: environment.providers.gemini.model || DEFAULT_GEMINI_MODEL,
       createReply: createGeminiMentorReply,
+      checkAvailability: checkGeminiProviderAvailability,
     },
     groq: {
       name: "groq",
       apiKey: environment.providers.groq.apiKey,
       model: environment.providers.groq.model || DEFAULT_GROQ_MODEL,
       createReply: createGroqMentorReply,
+      checkAvailability: checkGroqProviderAvailability,
     },
     openrouter: {
       name: "openrouter",
       apiKey: environment.providers.openrouter.apiKey,
       model: environment.providers.openrouter.model || DEFAULT_OPENROUTER_MODEL,
       createReply: createOpenRouterMentorReply,
+      checkAvailability: checkOpenRouterProviderAvailability,
     },
     openai: {
       name: "openai",
       apiKey: environment.providers.openai.apiKey,
       model: environment.providers.openai.model || DEFAULT_OPENAI_MODEL,
       createReply: createOpenAIMentorReply,
+      checkAvailability: checkOpenAIProviderAvailability,
     },
   }
+}
+
+function getProviderFailureReason(error: MentorProviderError): string {
+  const providerSignal = [error.providerErrorCode, error.providerErrorType]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase()
+
+  if (error.status === 401) return "chave inválida ou sem autorização"
+  if (error.status === 403) return "acesso negado pelo provedor"
+  if (error.status === 404) return "modelo ou endpoint não encontrado"
+  if (error.status === 413) return "solicitação recusada por tamanho"
+
+  if (error.status === 429) {
+    if (/insufficient_quota|billing|credit|quota/.test(providerSignal)) {
+      return "cota ou créditos indisponíveis"
+    }
+
+    if (/rate.?limit|tokens|requests/.test(providerSignal)) {
+      return "limite temporário de requisições"
+    }
+
+    return "limite ou cota da API atingidos"
+  }
+
+  if (error.status && error.status >= 500) {
+    return "falha temporária do provedor"
+  }
+
+  if (error.message.toLowerCase().includes("tempo limite")) {
+    return "tempo limite de resposta excedido"
+  }
+
+  return "falha ao validar o provedor"
 }
 
 function getActiveCooldown(
@@ -162,9 +205,7 @@ export function resetMentorProviderCooldowns(): void {
   providerCooldowns.clear()
 }
 
-export async function createMentorProviderStatusReply(
-  request: MentorProviderRequest,
-): Promise<MentorApiResponse> {
+export async function createMentorProviderStatusReply(): Promise<MentorApiResponse> {
   const configs = createProviderConfigs()
 
   const results = await Promise.all(
@@ -182,14 +223,9 @@ export async function createMentorProviderStatusReply(
       const startedAt = Date.now()
 
       try {
-        await provider.createReply({
+        await provider.checkAvailability({
           apiKey: provider.apiKey,
           model: provider.model,
-          request: {
-            ...request,
-            history: [],
-            message: "Responda somente com a palavra OK.",
-          },
         })
 
         providerCooldowns.delete(providerName)
@@ -221,6 +257,7 @@ export async function createMentorProviderStatusReply(
           status: "unavailable" as const,
           latencyMs: Date.now() - startedAt,
           httpStatus: normalizedError.status,
+          reason: getProviderFailureReason(normalizedError),
         }
       }
     }),
@@ -238,8 +275,10 @@ export async function createMentorProviderStatusReply(
       "httpStatus" in result && result.httpStatus
         ? ` — HTTP ${result.httpStatus}`
         : ""
+    const reason =
+      "reason" in result && result.reason ? ` — ${result.reason}` : ""
 
-    return `- ${result.provider}: ${statusLabels[result.status]} (${result.model})${latency}${httpStatus}`
+    return `- ${result.provider}: ${statusLabels[result.status]} (${result.model})${latency}${httpStatus}${reason}`
   })
 
   return {

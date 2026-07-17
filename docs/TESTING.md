@@ -16,7 +16,7 @@ Nunca atualize snapshots automaticamente em CI. O servidor do Playwright usa uma
 
 ## Estado da matriz em julho de 2026
 
-O piso global do Vitest é 40% de statements, 30% de branches, 40% de functions e 40% de lines; módulos críticos possuem pisos maiores em `vitest.config.ts`. A validação atual possui 126 testes unitários/de integração e 56 cenários E2E, sem contar projetos ou viewports. Swipe, drag mobile, fechamento do bottom sheet por arrasto e bloqueio de scroll disparam eventos reais.
+O piso global do Vitest é 40% de statements, 30% de branches, 40% de functions e 40% de lines; módulos críticos possuem pisos maiores em `vitest.config.ts`. A validação atual possui 128 testes unitários/de integração e 56 cenários E2E, sem contar projetos ou viewports. Swipe, drag mobile, fechamento do bottom sheet por arrasto e bloqueio de scroll disparam eventos reais.
 
 A estratégia visual oficial é **A, baseline Linux na CI**. A matriz contém 51 cenários e 51 snapshots `-linux.png` versionados, sem duplicar estados exclusivos de desktop ou mobile nos demais projetos. O job manual usa Ubuntu com o Chromium instalado pelo Playwright. Em macOS ou Windows, diferenças de rasterização devem ser revisadas pela CI Linux; baselines adicionais por plataforma só devem ser versionados quando houver uma decisão explícita. Em ambientes sem o navegador gerenciado, `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` pode apontar para um Chromium local.
 

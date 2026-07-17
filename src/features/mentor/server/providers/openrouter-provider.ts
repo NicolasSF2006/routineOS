@@ -2,6 +2,8 @@ import { fetchMentorProvider } from "@/features/mentor/server/provider-http-clie
 import {
   createProviderMessages,
   MAX_MENTOR_OUTPUT_TOKENS,
+  PROVIDER_HEALTH_CHECK_OUTPUT_TOKENS,
+  PROVIDER_HEALTH_CHECK_PROMPT,
   type MentorProviderRequest,
 } from "@/features/mentor/server/mentor-prompts"
 
@@ -9,6 +11,29 @@ export const DEFAULT_OPENROUTER_MODEL = "openrouter/free"
 
 const OPENROUTER_CHAT_COMPLETIONS_URL =
   "https://openrouter.ai/api/v1/chat/completions"
+
+export async function checkOpenRouterProviderAvailability({
+  apiKey,
+  model,
+}: {
+  apiKey: string
+  model: string
+}): Promise<void> {
+  await fetchMentorProvider("openrouter", OPENROUTER_CHAT_COMPLETIONS_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+      "X-Title": "RoutineOS Mentor IA",
+    },
+    body: JSON.stringify({
+      model,
+      messages: [{ role: "user", content: PROVIDER_HEALTH_CHECK_PROMPT }],
+      max_tokens: PROVIDER_HEALTH_CHECK_OUTPUT_TOKENS,
+      temperature: 0,
+    }),
+  })
+}
 
 function extractChatCompletionText(payload: unknown): string | null {
   if (!payload || typeof payload !== "object") return null

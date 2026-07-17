@@ -48,6 +48,8 @@ export const MENTOR_SYSTEM_PROMPT = [
 ].join(" ")
 
 export const MAX_MENTOR_OUTPUT_TOKENS = 4_800
+export const PROVIDER_HEALTH_CHECK_PROMPT = "Responda somente com OK."
+export const PROVIDER_HEALTH_CHECK_OUTPUT_TOKENS = 16
 
 export interface MentorProviderRequest {
   message: string

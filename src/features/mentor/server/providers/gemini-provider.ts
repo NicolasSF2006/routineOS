@@ -3,6 +3,8 @@ import {
   createContextMessage,
   MAX_MENTOR_OUTPUT_TOKENS,
   MENTOR_SYSTEM_PROMPT,
+  PROVIDER_HEALTH_CHECK_OUTPUT_TOKENS,
+  PROVIDER_HEALTH_CHECK_PROMPT,
   type MentorProviderRequest,
 } from "@/features/mentor/server/mentor-prompts"
 
@@ -10,6 +12,35 @@ export const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
 
 const GEMINI_API_VERSION = "v1beta"
 const GEMINI_BASE_URL = "https://generativelanguage.googleapis.com"
+
+export async function checkGeminiProviderAvailability({
+  apiKey,
+  model,
+}: {
+  apiKey: string
+  model: string
+}): Promise<void> {
+  const endpoint = `${GEMINI_BASE_URL}/${GEMINI_API_VERSION}/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`
+
+  await fetchMentorProvider("gemini", endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: PROVIDER_HEALTH_CHECK_PROMPT }],
+        },
+      ],
+      generationConfig: {
+        maxOutputTokens: PROVIDER_HEALTH_CHECK_OUTPUT_TOKENS,
+        temperature: 0,
+      },
+    }),
+  })
+}
 
 type GeminiContent = {
   role: "user" | "model"

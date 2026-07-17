@@ -1,9 +1,47 @@
 import {
   createProviderHttpError,
   MentorProviderError,
+  type MentorProviderErrorDetails,
 } from "@/features/mentor/server/provider-error"
 
 export const DEFAULT_PROVIDER_TIMEOUT_MS = 20_000
+const MAX_ERROR_BODY_LENGTH = 4_000
+
+function readStringProperty(
+  value: Record<string, unknown>,
+  property: string,
+): string | undefined {
+  const candidate = value[property]
+  return typeof candidate === "string" && candidate.trim()
+    ? candidate.trim()
+    : undefined
+}
+
+async function readProviderErrorDetails(
+  response: Response,
+): Promise<MentorProviderErrorDetails> {
+  try {
+    const rawBody = (await response.text()).slice(0, MAX_ERROR_BODY_LENGTH)
+    if (!rawBody) return {}
+
+    const parsed = JSON.parse(rawBody) as unknown
+    if (!parsed || typeof parsed !== "object") return {}
+
+    const root = parsed as Record<string, unknown>
+    const nestedError = root.error
+    const source =
+      nestedError && typeof nestedError === "object"
+        ? (nestedError as Record<string, unknown>)
+        : root
+
+    return {
+      providerErrorCode: readStringProperty(source, "code"),
+      providerErrorType: readStringProperty(source, "type"),
+    }
+  } catch {
+    return {}
+  }
+}
 
 export async function fetchMentorProvider(
   provider: string,
@@ -18,7 +56,8 @@ export async function fetchMentorProvider(
     const response = await fetch(url, { ...init, signal: controller.signal })
 
     if (!response.ok) {
-      throw createProviderHttpError(provider, response)
+      const details = await readProviderErrorDetails(response)
+      throw createProviderHttpError(provider, response, details)
     }
 
     return response

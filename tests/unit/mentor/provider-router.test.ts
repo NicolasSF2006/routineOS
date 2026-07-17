@@ -93,13 +93,50 @@ describe("roteamento dos provedores do Mentor", () => {
     process.env.GROQ_API_KEY = "segredo-que-nao-pode-vazar"
     vi.spyOn(globalThis, "fetch").mockResolvedValue(groqResponse("OK"))
 
-    const response = await createMentorProviderStatusReply(request())
+    const response = await createMentorProviderStatusReply()
     const logs =
       vi.mocked(console.info).mock.calls.flat().join(" ") +
       vi.mocked(console.warn).mock.calls.flat().join(" ")
 
+    const requestBody = JSON.parse(
+      vi.mocked(globalThis.fetch).mock.calls[0][1]?.body as string,
+    )
+
     expect(response.reply).toContain("groq: ✅ funcionando")
     expect(response.reply).not.toContain("segredo-que-nao-pode-vazar")
     expect(logs).not.toContain("segredo-que-nao-pode-vazar")
+    expect(requestBody.messages).toEqual([
+      { role: "user", content: "Responda somente com OK." },
+    ])
+    expect(requestBody.max_tokens).toBe(16)
+    expect(JSON.stringify(requestBody)).not.toContain(
+      "Contexto resumido do RoutineOS",
+    )
+  })
+
+  it("explica quando a OpenAI está sem cota ou créditos", async () => {
+    process.env.OPENAI_API_KEY = "chave-openai-secreta"
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          error: {
+            message: "You exceeded your current quota.",
+            type: "insufficient_quota",
+            code: "insufficient_quota",
+          },
+        }),
+        {
+          status: 429,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    )
+
+    const response = await createMentorProviderStatusReply()
+
+    expect(response.reply).toContain("openai: ❌ indisponível")
+    expect(response.reply).toContain("HTTP 429")
+    expect(response.reply).toContain("cota ou créditos indisponíveis")
+    expect(response.reply).not.toContain("You exceeded")
   })
 })
