@@ -25,6 +25,8 @@ O parser aceita texto normal ou JSON estruturado, repara controles inválidos em
 
 Depois de uma prévia estruturada, confirmações curtas como “sim”, “por favor” e “então crie” reutilizam a proposta validada localmente e geram `propose-routine` sem depender de uma nova chamada à IA. Quando uma resposta antiga trouxe apenas uma tabela em texto, uma confirmação curta solicita uma nova prévia estruturada antes de abrir o rascunho.
 
+Pedidos de alteração feitos enquanto existe uma `preview-routine` são enviados como uma operação compacta: a API inclui a proposta atual, o pedido do usuário e somente o contexto recente necessário. A resposta precisa trazer uma nova `preview-routine`; caso todos os provedores falhem, a proposta anterior continua intacta. Em rotinas `custom`, todos os blocos — incluindo pausas e almoço — precisam declarar `durationMinutes`, pois o servidor não inventa durações padrão para completar dados ausentes.
+
 Logs contêm evento, provedor, duração, status e motivo técnico; nunca chave, cabeçalho, prompt, resposta ou contexto. Métricas locais contam tentativas, sucessos, falhas e duração acumulada.
 
 `/provedores` e o alias `/provedor` fazem uma chamada mínima e isolada para cada API configurada, sem enviar o prompt completo, o histórico ou o contexto do usuário. A verificação pode consumir uma pequena parte da cota, mas não garante que uma geração longa e estruturada terá sucesso. Em erros HTTP, a interface mostra apenas status e uma classificação segura, sem reproduzir mensagens brutas do provedor. Testes automatizados sempre mockam `fetch`.

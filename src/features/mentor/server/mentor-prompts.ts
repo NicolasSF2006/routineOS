@@ -43,6 +43,7 @@ export const MENTOR_SYSTEM_PROMPT = [
   "Para uma janela das 19:00 às 21:00 com foco 25, pausa curta 5, pausa longa 15 após 2 focos, cabem: foco 19:00-19:25, pausa curta 19:25-19:30, foco 19:30-19:55, pausa longa 19:55-20:10, foco 20:10-20:35, pausa curta 20:35-20:40 e foco final de 20 minutos até 21:00.",
   "Se o último bloco precisar ser menor para terminar exatamente no limite, mantenha-o apenas quando restarem pelo menos 10 minutos.",
   "Em rotina custom, preserve a ordem exata pedida pelo usuário e inclua as pausas, almoço e outros blocos explicitamente.",
+  "Em rotina custom, cada bloco deve informar durationMinutes explicitamente. Calcule a duração exata a partir dos horários fornecidos pelo usuário; nunca omita durationMinutes nem substitua durações diferentes por um valor padrão.",
   "Use lunch somente quando o usuário realmente quiser intervalo de almoço.",
   "Os títulos de study e project devem indicar conteúdo real, como 'Interface e organização de mídia', 'Fundamentos de corte' ou 'Projeto prático no DaVinci Resolve'. Nunca use apenas 'Tarefa', 'Bloco de estudo', 'Pomodoro' ou 'Projeto'.",
 ].join(" ")
@@ -55,6 +56,7 @@ export interface MentorProviderRequest {
   message: string
   history: MentorMessage[]
   context: MentorContext
+  omitContext?: boolean
 }
 
 export function stringifyMentorContext(context: MentorContext): string {
@@ -79,16 +81,21 @@ export function createProviderMessages({
   message,
   history,
   context,
+  omitContext = false,
 }: MentorProviderRequest) {
   return [
     {
       role: "system" as const,
       content: MENTOR_SYSTEM_PROMPT,
     },
-    {
-      role: "user" as const,
-      content: createContextMessage(context),
-    },
+    ...(omitContext
+      ? []
+      : [
+          {
+            role: "user" as const,
+            content: createContextMessage(context),
+          },
+        ]),
     ...history.map((item) => ({
       role: item.role,
       content: createHistoryMessageContent(item),

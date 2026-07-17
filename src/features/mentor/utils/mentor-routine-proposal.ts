@@ -117,6 +117,62 @@ export function isRoutineCreationRequest(message: string): boolean {
   )
 }
 
+export function isRoutineAdjustmentRequest(message: string): boolean {
+  const normalized = normalizeComparableText(message)
+  if (!normalized) return false
+
+  const adjustmentSignals = [
+    "altere",
+    "alterar",
+    "ajuste",
+    "ajustar",
+    "mude",
+    "mudar",
+    "troque",
+    "trocar",
+    "aumente",
+    "aumentar",
+    "diminua",
+    "diminuir",
+    "reduza",
+    "reduzir",
+    "adicione",
+    "adicionar",
+    "inclua",
+    "incluir",
+    "remova",
+    "remover",
+    "substitua",
+    "substituir",
+    "recalcule",
+    "recalcular",
+  ]
+  const routineDetailSignals = [
+    "bloco",
+    "blocos",
+    "duracao",
+    "minuto",
+    "minutos",
+    "horario",
+    "horarios",
+    "pausa",
+    "pausas",
+    "almoco",
+    "materia",
+    "materias",
+    "dia",
+    "dias",
+    "rotina",
+    "proposta",
+  ]
+
+  return (
+    adjustmentSignals.some((signal) =>
+      new RegExp(`(^| )${signal}( |$)`).test(normalized),
+    ) && routineDetailSignals.some((signal) => normalized.includes(signal))
+  )
+}
+
 export function hasUnstructuredRoutineSuggestion(
   history: MentorMessage[],
 ): boolean {

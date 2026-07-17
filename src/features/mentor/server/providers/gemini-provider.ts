@@ -51,12 +51,17 @@ function buildGeminiContents({
   message,
   history,
   context,
+  omitContext = false,
 }: MentorProviderRequest): GeminiContent[] {
   return [
-    {
-      role: "user",
-      parts: [{ text: createContextMessage(context) }],
-    },
+    ...(omitContext
+      ? []
+      : [
+          {
+            role: "user" as const,
+            parts: [{ text: createContextMessage(context) }],
+          },
+        ]),
     ...history.map((item): GeminiContent => ({
       role: item.role === "assistant" ? "model" : "user",
       parts: [{ text: item.content }],

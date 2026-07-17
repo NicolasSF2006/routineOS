@@ -204,8 +204,18 @@ interface NormalizedRawBlock {
 function normalizeRawBlock(
   raw: unknown,
   routineName: string,
+  method: MentorRoutineProposal["method"],
 ): NormalizedRawBlock | null {
   if (!isObject(raw) || !isRoutineBlockType(raw.type)) return null
+
+  if (
+    method === "custom" &&
+    (typeof raw.durationMinutes !== "number" ||
+      !Number.isFinite(raw.durationMinutes) ||
+      !Number.isInteger(raw.durationMinutes))
+  ) {
+    return null
+  }
 
   const requestedDurationMinutes = normalizeInteger(
     raw.durationMinutes,
@@ -450,10 +460,13 @@ function normalizeSchedule(
   )
     return null
 
-  const rawBlocks = raw.blocks
+  const normalizedRawBlocks = raw.blocks
     .slice(0, MAX_BLOCKS_PER_SCHEDULE)
-    .map((block) => normalizeRawBlock(block, routineName))
-    .filter((block): block is NormalizedRawBlock => block !== null)
+    .map((block) => normalizeRawBlock(block, routineName, method))
+
+  if (normalizedRawBlocks.some((block) => block === null)) return null
+
+  const rawBlocks = normalizedRawBlocks as NormalizedRawBlock[]
 
   if (rawBlocks.length === 0) return null
 

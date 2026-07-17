@@ -210,6 +210,93 @@ describe("roteamento dos provedores do Mentor", () => {
     })
   })
 
+  it("ajusta uma prévia com payload compacto e exige nova preview-routine", async () => {
+    process.env.GROQ_API_KEY = "chave-groq-secreta"
+    const adjustedProposal = {
+      name: "Rotina ajustada",
+      method: "custom" as const,
+      summary: "Blocos de estudo com 50 minutos.",
+      schedules: [
+        {
+          weekdays: ["monday" as const],
+          availabilityStartTime: "10:30",
+          availabilityEndTime: "12:15",
+          blocks: [
+            {
+              type: "study" as const,
+              title: "Node.js",
+              startTime: "10:30",
+              durationMinutes: 50,
+            },
+            {
+              type: "short-break" as const,
+              title: "Pausa curta",
+              startTime: "11:20",
+              durationMinutes: 5,
+            },
+            {
+              type: "study" as const,
+              title: "JavaScript",
+              startTime: "11:25",
+              durationMinutes: 50,
+            },
+          ],
+        },
+      ],
+    }
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      groqContentResponse(
+        JSON.stringify({
+          reply: "Prévia ajustada.",
+          action: {
+            type: "preview-routine",
+            routine: adjustedProposal,
+          },
+        }),
+      ),
+    )
+
+    const response = await createMentorReply({
+      ...request(),
+      message: "Aumente a duração dos blocos de estudos para 50 minutos",
+      history: [
+        {
+          id: "pedido-original",
+          role: "user",
+          content: "Crie uma rotina de Node.js e JavaScript.",
+          createdAt: new Date(0).toISOString(),
+        },
+        {
+          id: "previa",
+          role: "assistant",
+          content: "Prévia pronta.",
+          createdAt: new Date(1).toISOString(),
+          action: {
+            type: "preview-routine",
+            routine: mentorRoutineProposal,
+          },
+        },
+      ],
+    })
+
+    expect(response).toMatchObject({
+      mode: "groq",
+      action: { type: "preview-routine" },
+    })
+
+    const requestBody = JSON.parse(
+      fetchMock.mock.calls[0][1]?.body as string,
+    ) as { messages: Array<{ role: string; content: string }> }
+    const serializedMessages = JSON.stringify(requestBody.messages)
+
+    expect(serializedMessages).toContain("AJUSTAR PRÉVIA DE ROTINA")
+    expect(serializedMessages).toContain("PROPOSTA ATUAL")
+    expect(serializedMessages).toContain(
+      "Aumente a duração dos blocos de estudos para 50 minutos",
+    )
+    expect(serializedMessages).not.toContain("Contexto resumido do RoutineOS")
+  })
+
   it("converte a confirmação de uma tabela antiga em nova prévia estruturada", async () => {
     process.env.GROQ_API_KEY = "chave-groq-secreta"
     vi.spyOn(globalThis, "fetch").mockResolvedValue(

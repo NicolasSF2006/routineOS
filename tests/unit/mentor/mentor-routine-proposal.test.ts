@@ -3,6 +3,7 @@ import {
   createRoutineFromMentorProposal,
   hasUnstructuredRoutineSuggestion,
   isExplicitRoutineConfirmation,
+  isRoutineAdjustmentRequest,
   isRoutineCreationRequest,
   normalizeMentorAction,
   normalizeMentorRoutineProposal,
@@ -69,6 +70,81 @@ describe("proposta de rotina do Mentor", () => {
     })
   })
 
+  it("preserva as durações explícitas de uma rotina custom", () => {
+    const normalized = normalizeMentorRoutineProposal({
+      name: "Rotina Full Stack",
+      method: "custom",
+      summary: "Blocos personalizados.",
+      schedules: [
+        {
+          weekdays: ["monday"],
+          availabilityStartTime: "10:30",
+          availabilityEndTime: "13:50",
+          blocks: [
+            { type: "study", title: "Node.js", durationMinutes: 50 },
+            { type: "short-break", durationMinutes: 5 },
+            { type: "study", title: "JavaScript", durationMinutes: 50 },
+            { type: "lunch", title: "Almoço", durationMinutes: 45 },
+            { type: "project", title: "Projeto ERP", durationMinutes: 50 },
+          ],
+        },
+      ],
+    })
+
+    expect(normalized?.schedules[0].blocks).toEqual([
+      expect.objectContaining({
+        type: "study",
+        title: "Node.js",
+        startTime: "10:30",
+        durationMinutes: 50,
+      }),
+      expect.objectContaining({
+        type: "short-break",
+        startTime: "11:20",
+        durationMinutes: 5,
+      }),
+      expect.objectContaining({
+        type: "study",
+        title: "JavaScript",
+        startTime: "11:25",
+        durationMinutes: 50,
+      }),
+      expect.objectContaining({
+        type: "lunch",
+        startTime: "12:15",
+        durationMinutes: 45,
+      }),
+      expect.objectContaining({
+        type: "project",
+        title: "Projeto ERP",
+        startTime: "13:00",
+        durationMinutes: 50,
+      }),
+    ])
+  })
+
+  it("rejeita rotina custom quando algum bloco omite a duração", () => {
+    expect(
+      normalizeMentorRoutineProposal({
+        name: "Rotina incompleta",
+        method: "custom",
+        summary: "Não deve inventar durações padrão.",
+        schedules: [
+          {
+            weekdays: ["monday"],
+            availabilityStartTime: "10:30",
+            availabilityEndTime: "12:00",
+            blocks: [
+              { type: "study", title: "Node.js", durationMinutes: 50 },
+              { type: "short-break", title: "Pausa" },
+              { type: "study", title: "JavaScript", durationMinutes: 35 },
+            ],
+          },
+        ],
+      }),
+    ).toBeNull()
+  })
+
   it("importa a proposta como nova rotina sem modificar a rotina existente", () => {
     const original = structuredClone(DEFAULT_ROUTINE)
     const draft = createRoutineFromMentorProposal(
@@ -108,6 +184,15 @@ describe("proposta de rotina do Mentor", () => {
       true,
     )
     expect(isRoutineCreationRequest("Analise minha rotina atual")).toBe(false)
+  })
+
+  it("identifica pedidos de ajuste em uma prévia de rotina", () => {
+    expect(
+      isRoutineAdjustmentRequest(
+        "Aumente a duração dos blocos de estudos para 50 minutos",
+      ),
+    ).toBe(true)
+    expect(isRoutineAdjustmentRequest("Explique o que é Node.js")).toBe(false)
   })
 
   it("identifica uma sugestão de rotina enviada sem action", () => {

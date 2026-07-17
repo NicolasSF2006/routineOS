@@ -9,6 +9,7 @@ import {
   findLatestRoutinePreview,
   hasUnstructuredRoutineSuggestion,
   isExplicitRoutineConfirmation,
+  isRoutineAdjustmentRequest,
   isRoutineConfirmationMessage,
   isRoutineCreationRequest,
 } from "@/features/mentor/utils/mentor-routine-proposal"
@@ -85,9 +86,41 @@ function createCompactStructuredRetryRequest(
       "A resposta estruturada anterior ficou truncada ou inválida.",
       "Gere novamente um único JSON válido e compacto, sem texto fora do objeto.",
       "Se for Pomodoro, inclua em blocks somente type e title dos focos study/project; omita pausas, startTime, durationMinutes e descriptions longas.",
+      "Se for rotina custom, inclua durationMinutes explicitamente em todos os blocos, inclusive pausas e almoço.",
       "Se for GERAR_TRILHA_ESTRUTURADA, mantenha propose-study-trail, use no máximo 4 passos curtos por tema e somente IDs permitidos.",
       "Agrupe dias iguais no mesmo schedule e não repita informações.",
       ...routinePreviewInstruction,
+    ].join("\n"),
+  }
+}
+
+function createRoutineAdjustmentRequest(
+  request: MentorProviderRequest,
+  latestPreview: NonNullable<ReturnType<typeof findLatestRoutinePreview>>,
+): MentorProviderRequest {
+  const recentUserContext = request.history
+    .filter((message) => message.role === "user")
+    .slice(-3)
+    .map((message) => message.content)
+
+  return {
+    ...request,
+    omitContext: true,
+    history: [],
+    message: [
+      "INSTRUÇÃO TÉCNICA: AJUSTAR PRÉVIA DE ROTINA",
+      "Modifique a proposta estruturada abaixo de acordo com o pedido atual do usuário.",
+      "Retorne obrigatoriamente um único JSON válido com action.type preview-routine.",
+      "Preserve todos os dados que o usuário não pediu para alterar.",
+      "Em rotina custom, informe durationMinutes explicitamente em todos os blocos e recalcule os horários sem ultrapassar availabilityEndTime.",
+      "Não responda apenas com explicação, tabela ou confirmação textual.",
+      "",
+      `PROPOSTA ATUAL: ${JSON.stringify(latestPreview)}`,
+      ...(recentUserContext.length > 0
+        ? ["", "CONTEXTO RECENTE DO USUÁRIO:", ...recentUserContext]
+        : []),
+      "",
+      `PEDIDO ATUAL: ${request.message}`,
     ].join("\n"),
   }
 }
@@ -310,6 +343,8 @@ export async function createMentorReply(
   request: MentorProviderRequest,
 ): Promise<MentorApiResponse> {
   const latestPreview = findLatestRoutinePreview(request.history)
+  const isAdjustmentRequest =
+    latestPreview !== null && isRoutineAdjustmentRequest(request.message)
 
   if (latestPreview && isExplicitRoutineConfirmation(request.message)) {
     return {
@@ -325,6 +360,7 @@ export async function createMentorReply(
 
   const requiresRoutinePreview =
     isRoutineCreationRequest(request.message) ||
+    isAdjustmentRequest ||
     (!latestPreview &&
       isRoutineConfirmationMessage(request.message) &&
       hasUnstructuredRoutineSuggestion(request.history))
@@ -353,7 +389,10 @@ export async function createMentorReply(
     const startedAt = Date.now()
 
     try {
-      let providerRequest = request
+      let providerRequest =
+        isAdjustmentRequest && latestPreview
+          ? createRoutineAdjustmentRequest(request, latestPreview)
+          : request
       let malformedReply =
         "A resposta estruturada da IA chegou incompleta. Tente gerar a prévia novamente."
 
@@ -418,9 +457,14 @@ export async function createMentorReply(
         malformedReply = missingRequiredRoutinePreview
           ? "A IA descreveu a rotina, mas não enviou a prévia estruturada necessária. Tente gerar a proposta novamente."
           : parsedResponse.reply
-        providerRequest = createCompactStructuredRetryRequest(request, {
-          requireRoutinePreview: requiresRoutinePreview,
-        })
+        providerRequest = createCompactStructuredRetryRequest(
+          isAdjustmentRequest && latestPreview
+            ? createRoutineAdjustmentRequest(request, latestPreview)
+            : request,
+          {
+            requireRoutinePreview: requiresRoutinePreview,
+          },
+        )
       }
 
       providerCooldowns.delete(providerName)
@@ -465,7 +509,9 @@ export async function createMentorReply(
 
   return {
     reply: requiresRoutinePreview
-      ? "Não consegui gerar a prévia estruturada da rotina agora. O comando /provedores testa apenas solicitações curtas; uma rotina completa exige uma resposta maior e validada. Tente novamente em alguns instantes."
+      ? isAdjustmentRequest
+        ? "Não consegui aplicar a alteração à prévia agora. A proposta anterior foi mantida sem mudanças; tente pedir o ajuste novamente em alguns instantes."
+        : "Não consegui gerar a prévia estruturada da rotina agora. O comando /provedores testa apenas solicitações curtas; uma rotina completa exige uma resposta maior e validada. Tente novamente em alguns instantes."
       : createMockMentorReply(request.message, request.context),
     mode: "mock",
   }

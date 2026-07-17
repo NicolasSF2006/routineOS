@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## Não publicado
+
+- Ajustes pedidos sobre uma prévia de rotina agora reutilizam a proposta estruturada em uma solicitação compacta, sem enviar todo o contexto do aplicativo.
+- Rotinas customizadas passam a exigir `durationMinutes` em todos os blocos, evitando que horários diferentes sejam substituídos silenciosamente por durações padrão.
+- O Mentor mantém a prévia anterior intacta quando não consegue aplicar uma alteração estruturada.
+
 ## v1.7.0
 
 - Adicionado modal de boas-vindas com tutorial em etapas para o primeiro acesso.
