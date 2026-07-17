@@ -74,8 +74,9 @@ export async function POST(request: Request) {
     context,
   }
 
+  const normalizedCommand = message.toLowerCase()
   const response =
-    message.toLowerCase() === "/provedores"
+    normalizedCommand === "/provedores" || normalizedCommand === "/provedor"
       ? await createMentorProviderStatusReply()
       : await createMentorReply(mentorRequest)
 

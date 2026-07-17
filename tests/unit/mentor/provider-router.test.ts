@@ -4,7 +4,10 @@ import {
   resetMentorProviderCooldowns,
 } from "@/features/mentor/server/mentor-provider-router"
 import { resetMentorObservability } from "@/features/mentor/server/mentor-observability"
-import { createMentorContext } from "../../fixtures/mentor"
+import {
+  createMentorContext,
+  mentorRoutineProposal,
+} from "../../fixtures/mentor"
 
 const ORIGINAL_ENV = { ...process.env }
 
@@ -17,9 +20,13 @@ function request() {
 }
 
 function groqResponse(reply = "Resposta da Groq") {
+  return groqContentResponse(JSON.stringify({ reply }))
+}
+
+function groqContentResponse(content: string) {
   return new Response(
     JSON.stringify({
-      choices: [{ message: { content: JSON.stringify({ reply }) } }],
+      choices: [{ message: { content } }],
     }),
     { status: 200, headers: { "Content-Type": "application/json" } },
   )
@@ -138,5 +145,102 @@ describe("roteamento dos provedores do Mentor", () => {
     expect(response.reply).toContain("HTTP 429")
     expect(response.reply).toContain("cota ou créditos indisponíveis")
     expect(response.reply).not.toContain("You exceeded")
+  })
+
+  it("repete a solicitação quando um pedido de rotina volta sem action", async () => {
+    process.env.GROQ_API_KEY = "chave-groq-secreta"
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        groqContentResponse(
+          "Rotina semanal: segunda-feira, 10:30-11:20, TypeScript.",
+        ),
+      )
+      .mockResolvedValueOnce(
+        groqContentResponse(
+          JSON.stringify({
+            reply: "Prévia pronta.",
+            action: {
+              type: "preview-routine",
+              routine: mentorRoutineProposal,
+            },
+          }),
+        ),
+      )
+
+    const response = await createMentorReply({
+      ...request(),
+      message: "Crie uma rotina semanal de estudos",
+    })
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(response).toMatchObject({
+      mode: "groq",
+      action: { type: "preview-routine" },
+    })
+    expect(
+      JSON.parse(fetchMock.mock.calls[1][1]?.body as string).messages.at(-1)
+        .content,
+    ).toContain("action.type preview-routine")
+  })
+
+  it("confirma uma prévia com a resposta curta por favor", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+    const response = await createMentorReply({
+      ...request(),
+      message: "por favor",
+      history: [
+        {
+          id: "previa",
+          role: "assistant",
+          content: "Prévia pronta.",
+          createdAt: new Date(0).toISOString(),
+          action: {
+            type: "preview-routine",
+            routine: mentorRoutineProposal,
+          },
+        },
+      ],
+    })
+
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(response).toMatchObject({
+      mode: "mock",
+      action: { type: "propose-routine" },
+    })
+  })
+
+  it("converte a confirmação de uma tabela antiga em nova prévia estruturada", async () => {
+    process.env.GROQ_API_KEY = "chave-groq-secreta"
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      groqContentResponse(
+        JSON.stringify({
+          reply: "Prévia pronta.",
+          action: {
+            type: "preview-routine",
+            routine: mentorRoutineProposal,
+          },
+        }),
+      ),
+    )
+
+    const response = await createMentorReply({
+      ...request(),
+      message: "então crie",
+      history: [
+        {
+          id: "tabela",
+          role: "assistant",
+          content:
+            "Rotina semanal\nSegunda-feira\n10:30-11:20 TypeScript\nDeseja que eu gere a prévia?",
+          createdAt: new Date(0).toISOString(),
+        },
+      ],
+    })
+
+    expect(response).toMatchObject({
+      mode: "groq",
+      action: { type: "preview-routine" },
+    })
   })
 })

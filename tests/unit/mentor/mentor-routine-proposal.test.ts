@@ -1,6 +1,9 @@
 import { DEFAULT_ROUTINE } from "@/constants/routine"
 import {
   createRoutineFromMentorProposal,
+  hasUnstructuredRoutineSuggestion,
+  isExplicitRoutineConfirmation,
+  isRoutineCreationRequest,
   normalizeMentorAction,
   normalizeMentorRoutineProposal,
 } from "@/features/mentor/utils/mentor-routine-proposal"
@@ -91,5 +94,39 @@ describe("proposta de rotina do Mentor", () => {
       }),
     ).toMatchObject({ type: "propose-routine" })
     expect(normalizeMentorAction({ type: "reset-settings" })).toBeNull()
+  })
+
+  it("reconhece confirmações curtas quando já existe uma prévia", () => {
+    expect(isExplicitRoutineConfirmation("sim")).toBe(true)
+    expect(isExplicitRoutineConfirmation("por favor")).toBe(true)
+    expect(isExplicitRoutineConfirmation("então crie")).toBe(true)
+    expect(isExplicitRoutineConfirmation("sim, mas ajuste a sexta")).toBe(false)
+  })
+
+  it("identifica pedidos explícitos de criação de rotina", () => {
+    expect(isRoutineCreationRequest("Crie uma rotina semanal de estudos")).toBe(
+      true,
+    )
+    expect(isRoutineCreationRequest("Analise minha rotina atual")).toBe(false)
+  })
+
+  it("identifica uma sugestão de rotina enviada sem action", () => {
+    expect(
+      hasUnstructuredRoutineSuggestion([
+        {
+          id: "resposta",
+          role: "assistant",
+          createdAt: new Date(0).toISOString(),
+          content:
+            "Rotina semanal\nSegunda-feira\n10:30–11:20 Node.js\nDeseja que eu gere a prévia?",
+        },
+        {
+          id: "fallback",
+          role: "assistant",
+          createdAt: new Date(1).toISOString(),
+          content: "Estou em modo local no momento.",
+        },
+      ]),
+    ).toBe(true)
   })
 })

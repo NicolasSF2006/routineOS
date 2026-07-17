@@ -113,3 +113,6 @@
 - adicionado fechamento por Escape, contenção e devolução de foco no modal de edição de blocos.
 - reduzido o `/provedores` a uma verificação mínima por API, sem enviar prompt completo, histórico ou contexto do usuário;
 - adicionada distinção segura entre limite temporário e ausência de cota/créditos em respostas HTTP 429 dos provedores.
+- exigida uma `preview-routine` válida quando o usuário pede a criação de uma rotina, evitando que tabelas em texto livre sejam tratadas como propostas aplicáveis;
+- adicionadas confirmações curtas como “sim”, “por favor” e “então crie” para reutilizar a última prévia estruturada sem nova chamada ao provedor;
+- adicionado suporte ao alias `/provedor` e uma mensagem específica quando apenas o teste curto funciona, mas a geração estruturada falha.

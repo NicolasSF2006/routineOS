@@ -29,7 +29,33 @@ function normalizeComparableText(value: string): string {
     .trim()
 }
 
-export function isExplicitRoutineConfirmation(message: string): boolean {
+const ROUTINE_CONFIRMATION_SIGNALS = [
+  "sim",
+  "sim por favor",
+  "por favor",
+  "claro",
+  "pode",
+  "pode sim",
+  "pode continuar",
+  "continue",
+  "faca",
+  "pode fazer",
+  "crie",
+  "entao crie",
+  "pode criar",
+  "pode aplicar",
+  "pode montar",
+  "crie a rotina",
+  "aplique a rotina",
+  "monte a rotina",
+  "esta bom pode criar",
+  "aprovado",
+  "confirmo",
+  "eu falei que sim",
+  "eu disse que sim",
+]
+
+export function isRoutineConfirmationMessage(message: string): boolean {
   const normalized = normalizeComparableText(message)
   if (!normalized) return false
 
@@ -50,17 +76,74 @@ export function isExplicitRoutineConfirmation(message: string): boolean {
     return false
   }
 
-  return [
-    "pode criar",
-    "pode aplicar",
-    "pode montar",
-    "crie a rotina",
-    "aplique a rotina",
-    "monte a rotina",
-    "esta bom pode criar",
-    "aprovado",
-    "confirmo",
-  ].some((signal) => normalized.includes(signal))
+  return ROUTINE_CONFIRMATION_SIGNALS.some(
+    (signal) =>
+      normalized === signal ||
+      normalized.startsWith(`${signal} `) ||
+      normalized.endsWith(` ${signal}`),
+  )
+}
+
+export function isRoutineCreationRequest(message: string): boolean {
+  const normalized = normalizeComparableText(message)
+  if (!normalized) return false
+
+  const routineSignals = [
+    "rotina",
+    "cronograma",
+    "agenda de estudos",
+    "planejamento semanal",
+  ]
+  const creationSignals = [
+    "crie",
+    "criar",
+    "monte",
+    "montar",
+    "gere",
+    "gerar",
+    "organize",
+    "organizar",
+    "planeje",
+    "planejar",
+    "elabore",
+    "distribua",
+  ]
+
+  return (
+    routineSignals.some((signal) => normalized.includes(signal)) &&
+    creationSignals.some((signal) =>
+      new RegExp(`(^| )${signal}( |$)`).test(normalized),
+    )
+  )
+}
+
+export function hasUnstructuredRoutineSuggestion(
+  history: MentorMessage[],
+): boolean {
+  for (let index = history.length - 1; index >= 0; index -= 1) {
+    const message = history[index]
+    if (message.role !== "assistant") continue
+    if (message.action?.type === "preview-routine") return false
+
+    const normalized = normalizeComparableText(message.content)
+    const containsRoutine =
+      normalized.includes("rotina") || normalized.includes("cronograma")
+    const containsScheduleSignal =
+      /\b\d{1,2}:\d{2}\b/.test(message.content) ||
+      normalized.includes("segunda feira") ||
+      normalized.includes("terca feira") ||
+      normalized.includes("quarta feira") ||
+      normalized.includes("quinta feira") ||
+      normalized.includes("sexta feira")
+
+    if (containsRoutine && containsScheduleSignal) return true
+  }
+
+  return false
+}
+
+export function isExplicitRoutineConfirmation(message: string): boolean {
+  return isRoutineConfirmationMessage(message)
 }
 
 export function findLatestRoutinePreview(

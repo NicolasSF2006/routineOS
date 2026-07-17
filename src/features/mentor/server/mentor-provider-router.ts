@@ -5,8 +5,12 @@ import { parseMentorProviderResponse } from "@/features/mentor/server/mentor-res
 import { recordMentorEvent } from "@/features/mentor/server/mentor-observability"
 import { readMentorEnvironment } from "@/features/mentor/server/mentor-environment"
 import {
+  formatMentorRoutineProposalPreview,
   findLatestRoutinePreview,
+  hasUnstructuredRoutineSuggestion,
   isExplicitRoutineConfirmation,
+  isRoutineConfirmationMessage,
+  isRoutineCreationRequest,
 } from "@/features/mentor/utils/mentor-routine-proposal"
 import {
   checkGeminiProviderAvailability,
@@ -63,7 +67,15 @@ const providerCooldowns = new Map<MentorProviderName, ProviderCooldown>()
 
 function createCompactStructuredRetryRequest(
   request: MentorProviderRequest,
+  options?: { requireRoutinePreview?: boolean },
 ): MentorProviderRequest {
+  const routinePreviewInstruction = options?.requireRoutinePreview
+    ? [
+        "O usuário pediu uma rotina e a resposta deve conter obrigatoriamente action.type preview-routine.",
+        "Não responda com tabela ou explicação solta sem action.",
+      ]
+    : []
+
   return {
     ...request,
     message: [
@@ -75,6 +87,7 @@ function createCompactStructuredRetryRequest(
       "Se for Pomodoro, inclua em blocks somente type e title dos focos study/project; omita pausas, startTime, durationMinutes e descriptions longas.",
       "Se for GERAR_TRILHA_ESTRUTURADA, mantenha propose-study-trail, use no máximo 4 passos curtos por tema e somente IDs permitidos.",
       "Agrupe dias iguais no mesmo schedule e não repita informações.",
+      ...routinePreviewInstruction,
     ].join("\n"),
   }
 }
@@ -310,6 +323,12 @@ export async function createMentorReply(
     }
   }
 
+  const requiresRoutinePreview =
+    isRoutineCreationRequest(request.message) ||
+    (!latestPreview &&
+      isRoutineConfirmationMessage(request.message) &&
+      hasUnstructuredRoutineSuggestion(request.history))
+
   const configs = createProviderConfigs()
   const providerOrder = createProviderOrder()
   const isAutomaticMode = getPreferredProvider() === "auto"
@@ -350,7 +369,37 @@ export async function createMentorReply(
         })
         const parsedResponse = parseMentorProviderResponse(reply)
 
-        if (!parsedResponse.malformedStructuredResponse) {
+        if (
+          requiresRoutinePreview &&
+          parsedResponse.action?.type === "propose-routine"
+        ) {
+          providerCooldowns.delete(providerName)
+          recordMentorEvent({
+            event: "provider-success",
+            provider: providerName,
+            durationMs: Date.now() - startedAt,
+          })
+
+          return {
+            reply: formatMentorRoutineProposalPreview(
+              parsedResponse.action.routine,
+            ),
+            mode: provider.name,
+            action: {
+              type: "preview-routine",
+              routine: parsedResponse.action.routine,
+            },
+          }
+        }
+
+        const missingRequiredRoutinePreview =
+          requiresRoutinePreview &&
+          parsedResponse.action?.type !== "preview-routine"
+
+        if (
+          !parsedResponse.malformedStructuredResponse &&
+          !missingRequiredRoutinePreview
+        ) {
           providerCooldowns.delete(providerName)
           const { malformedStructuredResponse: _ignored, ...response } =
             parsedResponse
@@ -366,8 +415,12 @@ export async function createMentorReply(
           }
         }
 
-        malformedReply = parsedResponse.reply
-        providerRequest = createCompactStructuredRetryRequest(request)
+        malformedReply = missingRequiredRoutinePreview
+          ? "A IA descreveu a rotina, mas não enviou a prévia estruturada necessária. Tente gerar a proposta novamente."
+          : parsedResponse.reply
+        providerRequest = createCompactStructuredRetryRequest(request, {
+          requireRoutinePreview: requiresRoutinePreview,
+        })
       }
 
       providerCooldowns.delete(providerName)
@@ -411,7 +464,9 @@ export async function createMentorReply(
   })
 
   return {
-    reply: createMockMentorReply(request.message, request.context),
+    reply: requiresRoutinePreview
+      ? "Não consegui gerar a prévia estruturada da rotina agora. O comando /provedores testa apenas solicitações curtas; uma rotina completa exige uma resposta maior e validada. Tente novamente em alguns instantes."
+      : createMockMentorReply(request.message, request.context),
     mode: "mock",
   }
 }
